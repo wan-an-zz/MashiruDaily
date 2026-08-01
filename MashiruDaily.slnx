@@ -1,0 +1,11 @@
+﻿<Solution>
+  <Project Path="MashiruDaily.Android/MashiruDaily.Android.csproj">
+    <Deploy />
+  </Project>
+  <Project Path="MashiruDaily.Browser/MashiruDaily.Browser.csproj" />
+  <Project Path="MashiruDaily.Desktop/MashiruDaily.Desktop.csproj" />
+  <Project Path="MashiruDaily.iOS/MashiruDaily.iOS.csproj">
+    <Deploy />
+  </Project>
+  <Project Path="MashiruDaily/MashiruDaily.csproj" />
+</Solution>
