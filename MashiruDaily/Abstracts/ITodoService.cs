@@ -17,6 +17,9 @@ public interface ITodoService
     /// <summary>All todos, pending and completed.</summary>
     IReadOnlyList<TodoItem> Items { get; }
 
+    /// <summary>Loads persisted todos. Must be awaited once before the UI is shown.</summary>
+    Task InitializeAsync();
+
     Task AddAsync(string title);
 
     Task RemoveAsync(TodoItem item);

@@ -11,23 +11,34 @@ namespace MashiruDaily.Services;
 /// <summary>
 /// Default <see cref="ITodoService"/> implementation. All mutations go through
 /// the service so behaviour stays consistent and can be unit tested without a UI.
+/// Mutations mutate in-memory state synchronously, raise <see cref="Changed"/>, then
+/// trigger a single-flight flush loop that persists a coalesced latest-wins snapshot.
 /// </summary>
 public sealed class TodoService : ITodoService
 {
     private readonly ITodoRepository _repository;
     private readonly ILogger<TodoService> _logger;
-    private readonly List<TodoItem> _items;
+    private readonly List<TodoItem> _items = new();
+    private readonly object _gate = new();
+    private IReadOnlyList<TodoItem>? _pendingSnapshot;
+    private bool _flushRunning;
 
     public TodoService(ITodoRepository repository, ILogger<TodoService> logger)
     {
         _repository = repository;
         _logger = logger;
-        _items = _repository.LoadAsync().GetAwaiter().GetResult().ToList();
     }
 
     public event EventHandler? Changed;
 
     public IReadOnlyList<TodoItem> Items => _items;
+
+    public async Task InitializeAsync()
+    {
+        var loaded = await _repository.LoadAsync();
+        _items.AddRange(loaded);
+        _logger.LogInformation("Loaded {Count} todos.", _items.Count);
+    }
 
     public Task AddAsync(string title)
     {
@@ -39,6 +50,7 @@ public sealed class TodoService : ITodoService
         _items.Add(item);
         _logger.LogInformation("Todo added: '{Title}' ({Id}).", trimmed, item.Id);
         OnChanged();
+        RequestFlush();
         return Task.CompletedTask;
     }
 
@@ -48,6 +60,7 @@ public sealed class TodoService : ITodoService
         {
             _logger.LogInformation("Todo removed: '{Title}' ({Id}).", item.Title, item.Id);
             OnChanged();
+            RequestFlush();
         }
 
         return Task.CompletedTask;
@@ -60,6 +73,7 @@ public sealed class TodoService : ITodoService
         _logger.LogInformation("Todo {State}: '{Title}' ({Id}).",
             item.IsCompleted ? "completed" : "reopened", item.Title, item.Id);
         OnChanged();
+        RequestFlush();
         return Task.CompletedTask;
     }
 
@@ -73,8 +87,49 @@ public sealed class TodoService : ITodoService
         item.Title = trimmed;
         _logger.LogInformation("Todo renamed: '{Previous}' -> '{New}' ({Id}).", previous, trimmed, item.Id);
         OnChanged();
+        RequestFlush();
         return Task.CompletedTask;
     }
 
     private void OnChanged() => Changed?.Invoke(this, EventArgs.Empty);
+
+    private void RequestFlush()
+    {
+        lock (_gate)
+        {
+            _pendingSnapshot = _items.ToList();
+            if (_flushRunning)
+                return;
+            _flushRunning = true;
+        }
+
+        _ = RunFlushLoopAsync();
+    }
+
+    private async Task RunFlushLoopAsync()
+    {
+        while (true)
+        {
+            IReadOnlyList<TodoItem>? snapshot;
+            lock (_gate)
+            {
+                snapshot = _pendingSnapshot;
+                if (snapshot is null)
+                {
+                    _flushRunning = false;
+                    return;
+                }
+                _pendingSnapshot = null;
+            }
+
+            try
+            {
+                await _repository.SaveAsync(snapshot);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to flush todos to storage.");
+            }
+        }
+    }
 }
