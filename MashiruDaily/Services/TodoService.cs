@@ -123,9 +123,8 @@ public sealed class TodoService : ITodoService
             if (_flushRunning)
                 return;
             _flushRunning = true;
+            _flushTask = RunFlushLoopAsync();
         }
-
-        _flushTask = RunFlushLoopAsync();
     }
 
     private IReadOnlyList<TodoItem> SnapshotItems()
