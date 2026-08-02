@@ -1,0 +1,40 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="using:MashiruDaily.Controls">
+
+    <ControlTheme x:Key="{x:Type controls:BottomNavigationItem}"
+                  TargetType="controls:BottomNavigationItem">
+        <Setter Property="Foreground" Value="{DynamicResource SukiLowText}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid Background="Transparent">
+                    <ContentPresenter x:Name="PART_ContentPresenter"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}">
+                        <ContentPresenter.Transitions>
+                            <Transitions>
+                                <DoubleTransition Property="Opacity" Duration="{DynamicResource ShortAnimationDuration}" />
+                                <TransformOperationsTransition Property="RenderTransform" Duration="{DynamicResource ShortAnimationDuration}">
+                                    <TransformOperationsTransition.Easing>CubicEaseInOut</TransformOperationsTransition.Easing>
+                                </TransformOperationsTransition>
+                            </Transitions>
+                        </ContentPresenter.Transitions>
+                    </ContentPresenter>
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+
+        <Style Selector="^:selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="RenderTransform">
+                <ScaleTransform ScaleX="1.1" ScaleY="1.1" />
+            </Setter>
+        </Style>
+        <Style Selector="^:not(:selected) /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Opacity" Value="0.65" />
+        </Style>
+    </ControlTheme>
+
+</ResourceDictionary>

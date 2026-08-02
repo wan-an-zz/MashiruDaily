@@ -17,6 +17,15 @@
 
         <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.0" />
 
+        <!-- SukiUI -->
+        <PackageVersion Include="SukiUI" Version="7.0.1" />
+
+        <!-- DI & Logging -->
+        <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
+        <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.10" />
+        <PackageVersion Include="NLog" Version="6.1.4" />
+        <PackageVersion Include="NLog.Extensions.Logging" Version="6.1.4" />
+
         <PackageVersion Include="Xamarin.AndroidX.Core.SplashScreen" Version="1.0.1.15" />
     </ItemGroup>
 </Project>
