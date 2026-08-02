@@ -2,6 +2,7 @@ using System;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using MashiruDaily.Abstracts;
 using MashiruDaily.Logging;
 using MashiruDaily.Services;
@@ -32,6 +33,8 @@ public partial class App : Application
         logger.LogInformation("MashiruDaily starting (desktop={IsDesktop}).",
             ApplicationLifetime is IClassicDesktopStyleApplicationLifetime);
 
+        LogCjkFontResolution(logger);
+
         var mainViewModel = Services.GetRequiredService<MainViewModel>();
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
@@ -48,6 +51,21 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private static void LogCjkFontResolution(ILogger logger)
+    {
+        // Diagnostic: report which font actually provides CJK glyphs. '待' = U+5F85.
+        if (FontManager.Current.TryMatchCharacter(
+                '待', FontStyle.Normal, FontWeight.Normal, FontStretch.Normal,
+                FontFamily.Default, null, out var typeface))
+        {
+            logger.LogInformation("CJK glyph '待' resolved to font '{Font}'.", typeface.FontFamily.Name);
+        }
+        else
+        {
+            logger.LogWarning("CJK glyph '待' could not be resolved to any font.");
+        }
     }
 
     private static IServiceProvider ConfigureServices()
