@@ -25,9 +25,12 @@ public partial class App : Application
         AvaloniaXamlLoader.Load(this);
     }
 
-    public override void OnFrameworkInitializationCompleted()
+    public override async void OnFrameworkInitializationCompleted()
     {
         Services = ConfigureServices();
+
+        var todoService = Services.GetRequiredService<ITodoService>();
+        await todoService.InitializeAsync();
 
         var logger = Services.GetRequiredService<ILogger<App>>();
         logger.LogInformation("MashiruDaily starting (desktop={IsDesktop}).",
@@ -80,7 +83,7 @@ public partial class App : Application
         });
 
         // Domain / infrastructure
-        services.AddSingleton<ITodoRepository, InMemoryTodoRepository>();
+        services.AddSingleton<ITodoRepository, JsonTodoRepository>();
         services.AddSingleton<ITodoService, TodoService>();
 
         // View models
