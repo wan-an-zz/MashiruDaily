@@ -48,6 +48,7 @@ TodoPageViewModel ──> ITodoService ──> ITodoRepository (JsonTodoReposito
 实现 `ITodoRepository`，负责 JSON 文件读写：
 
 - **文件路径**：`Path.Combine(Environment.GetFolderPath(SpecialFolder.ApplicationData), "MashiruDaily", "todos.json")`。
+- **可测试性**：构造函数接受可选 `dataDirectory` 参数（默认 `ApplicationData\MashiruDaily`），测试可传入临时目录；DI 注册使用默认值。
 - **LoadAsync**：
   - 文件不存在 → 返回空列表。
   - 文件损坏/反序列化失败 → 记录错误日志（NLog），返回空列表，不向调用方抛异常。
@@ -82,12 +83,14 @@ TodoPageViewModel ──> ITodoService ──> ITodoRepository (JsonTodoReposito
 
 ## 测试
 
+项目当前无测试工程。本实现**新增最小 xUnit 测试项目** `MashiruDaily.Tests`（引用 `MashiruDaily`），加入 `MashiruDaily.slnx`：
+
 - `TodoService` 变更操作后应调用 `SaveAsync` —— 使用 fake 仓储断言。
 - `JsonTodoRepository` 往返测试：保存后再加载，数据一致（Id/Title/IsCompleted/CreatedAt/CompletedAt）。
 - 文件不存在时 `LoadAsync` 返回空。
 - 损坏的 JSON 返回空且不抛异常。
 
-（项目当前无测试工程；如已有测试基础设施则复用，否则在本轮实现计划中评估是否新增最小测试项目。）
+测试文件路径使用临时目录（`Path.GetTempPath`），避免污染真实 ApplicationData。
 
 ## 明确决策
 
