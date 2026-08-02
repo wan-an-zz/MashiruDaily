@@ -19,6 +19,7 @@ public partial class App : Application
 {
     /// <summary>Root dependency injection container.</summary>
     public static IServiceProvider Services { get; private set; } = null!;
+    private bool _isDrainingShutdown;
 
     public override void Initialize()
     {
@@ -42,6 +43,7 @@ public partial class App : Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            desktop.ShutdownRequested += OnShutdownRequested;
             desktop.MainWindow = new MainWindow { DataContext = mainViewModel };
         }
         else if (ApplicationLifetime is IActivityApplicationLifetime activityLifetime)
@@ -54,6 +56,19 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private async void OnShutdownRequested(object? sender, ShutdownRequestedEventArgs e)
+    {
+        if (_isDrainingShutdown)
+            return;
+
+        _isDrainingShutdown = true;
+        e.Cancel = true;
+        var todoService = Services.GetRequiredService<ITodoService>();
+        await todoService.FlushAsync();
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+            desktop.Shutdown();
     }
 
     private static void LogCjkFontResolution(ILogger logger)

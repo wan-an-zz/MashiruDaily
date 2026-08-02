@@ -22,6 +22,7 @@ public sealed class TodoService : ITodoService
     private readonly object _gate = new();
     private IReadOnlyList<TodoItem>? _pendingSnapshot;
     private bool _flushRunning;
+    private Task _flushTask = Task.CompletedTask;
 
     public TodoService(ITodoRepository repository, ILogger<TodoService> logger)
     {
@@ -38,6 +39,27 @@ public sealed class TodoService : ITodoService
         var loaded = await _repository.LoadAsync();
         _items.AddRange(loaded);
         _logger.LogInformation("Loaded {Count} todos.", _items.Count);
+    }
+
+    public async Task FlushAsync()
+    {
+        Task flushTask;
+        lock (_gate)
+        {
+            _pendingSnapshot = SnapshotItems();
+            if (_flushRunning)
+            {
+                flushTask = _flushTask;
+            }
+            else
+            {
+                _flushRunning = true;
+                flushTask = RunFlushLoopAsync();
+                _flushTask = flushTask;
+            }
+        }
+
+        await flushTask;
     }
 
     public Task AddAsync(string title)
@@ -97,13 +119,30 @@ public sealed class TodoService : ITodoService
     {
         lock (_gate)
         {
-            _pendingSnapshot = _items.ToList();
+            _pendingSnapshot = SnapshotItems();
             if (_flushRunning)
                 return;
             _flushRunning = true;
         }
 
-        _ = RunFlushLoopAsync();
+        _flushTask = RunFlushLoopAsync();
+    }
+
+    private IReadOnlyList<TodoItem> SnapshotItems()
+    {
+        var snapshot = new List<TodoItem>(_items.Count);
+        foreach (var item in _items)
+        {
+            snapshot.Add(new TodoItem
+            {
+                Id = item.Id,
+                Title = item.Title,
+                IsCompleted = item.IsCompleted,
+                CreatedAt = item.CreatedAt,
+                CompletedAt = item.CompletedAt,
+            });
+        }
+        return snapshot;
     }
 
     private async Task RunFlushLoopAsync()

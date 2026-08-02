@@ -20,6 +20,9 @@ public interface ITodoService
     /// <summary>Loads persisted todos. Must be awaited once before the UI is shown.</summary>
     Task InitializeAsync();
 
+    /// <summary>Waits for all pending changes to be persisted. Call at shutdown.</summary>
+    Task FlushAsync();
+
     Task AddAsync(string title);
 
     Task RemoveAsync(TodoItem item);

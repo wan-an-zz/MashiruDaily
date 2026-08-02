@@ -41,6 +41,8 @@ public sealed class BlockingTodoRepository : ITodoRepository
         get { lock (_lock) return _saved.Count == 0 ? null : _saved[^1]; }
     }
 
+    public List<IReadOnlyList<TodoItem>> Saved => _saved;
+
     public async Task SaveAsync(IReadOnlyList<TodoItem> items)
     {
         bool first;
@@ -152,5 +154,50 @@ public class TodoServicePersistenceTests
         Assert.True(last.Single().IsCompleted);
         Assert.Equal("Y", last.Single().Title);
         Assert.NotNull(last.Single().CompletedAt);
+    }
+
+    [Fact]
+    public async Task Snapshot_IsAValueCopy_NotAffectedByLaterMutation()
+    {
+        var repo = new BlockingTodoRepository();
+        var service = new TodoService(repo, NullLogger<TodoService>.Instance);
+        await service.InitializeAsync();
+
+        await service.AddAsync("X");
+        await repo.FirstSaveStarted;
+
+        await service.ToggleAsync(service.Items[0]);
+        repo.ReleaseFirstSave();
+        await WaitForSaveAsync(repo, s => s is not null && s[0].IsCompleted);
+
+        var first = repo.Saved[0];
+        Assert.Single(first);
+        Assert.False(first[0].IsCompleted);
+        Assert.Null(first[0].CompletedAt);
+
+        var last = repo.LastSaved!;
+        Assert.True(last[0].IsCompleted);
+        Assert.NotNull(last[0].CompletedAt);
+    }
+
+    [Fact]
+    public async Task FlushAsync_WaitsForPendingWrites()
+    {
+        var repo = new BlockingTodoRepository();
+        var service = new TodoService(repo, NullLogger<TodoService>.Instance);
+        await service.InitializeAsync();
+
+        await service.AddAsync("A");
+        await repo.FirstSaveStarted;
+
+        var flushTask = service.FlushAsync();
+        Assert.False(flushTask.IsCompleted);
+
+        repo.ReleaseFirstSave();
+        await flushTask;
+
+        var last = repo.LastSaved!;
+        Assert.Single(last);
+        Assert.Equal("A", last[0].Title);
     }
 }
