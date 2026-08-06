@@ -1,14 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 
 namespace MashiruDaily.Controls;
 
-/// <summary>
-/// A single entry of the <see cref="BottomNavigationBar"/>. It hosts arbitrary
-/// content (typically an icon + label) and exposes an <see cref="IsSelected"/>
-/// state that is driven by the owning bar.
-/// </summary>
 public class BottomNavigationItem : ContentControl
 {
     public static readonly StyledProperty<bool> IsSelectedProperty =
@@ -26,5 +22,24 @@ public class BottomNavigationItem : ContentControl
 
         if (change.Property == IsSelectedProperty)
             PseudoClasses.Set(":selected", change.GetNewValue<bool>());
+    }
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            PseudoClasses.Set(":pressed", true);
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        PseudoClasses.Set(":pressed", false);
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        base.OnPointerCaptureLost(e);
+        PseudoClasses.Set(":pressed", false);
     }
 }
