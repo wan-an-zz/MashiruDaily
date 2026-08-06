@@ -15,33 +15,11 @@
                 <Border Background="{DynamicResource SukiCardBackground}"
                         BorderBrush="{DynamicResource SukiMediumBorderBrush}"
                         BorderThickness="0,1,0,0"
-                        CornerRadius="18,18,0,0">
-                    <Grid>
-                        <!-- Sliding selection pill (kept behind the items). -->
-                        <Grid IsHitTestVisible="False">
-                            <Border x:Name="PART_Indicator"
-                                    Width="52"
-                                    Height="36"
-                                    HorizontalAlignment="Left"
-                                    VerticalAlignment="Center"
-                                    CornerRadius="18"
-                                    Background="{DynamicResource SukiPrimaryColor15}">
-                                <Border.RenderTransform>
-                                    <TranslateTransform />
-                                </Border.RenderTransform>
-                                <Border.Transitions>
-                                    <Transitions>
-                                        <TransformOperationsTransition Property="RenderTransform"
-                                                                       Duration="{DynamicResource MediumAnimationDuration}">
-                                            <TransformOperationsTransition.Easing>CubicEaseInOut</TransformOperationsTransition.Easing>
-                                        </TransformOperationsTransition>
-                                    </Transitions>
-                                </Border.Transitions>
-                            </Border>
-                        </Grid>
-                        <ItemsPresenter Name="PART_ItemsPresenter"
-                                        ItemsPanel="{TemplateBinding ItemsPanel}" />
-                    </Grid>
+                        CornerRadius="18,18,0,0"
+                        BoxShadow="0 -4 12 0 #1A000000"
+                        ClipToBounds="True">
+                    <ItemsPresenter Name="PART_ItemsPresenter"
+                                    ItemsPanel="{TemplateBinding ItemsPanel}" />
                 </Border>
             </ControlTemplate>
         </Setter>

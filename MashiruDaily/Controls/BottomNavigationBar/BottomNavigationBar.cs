@@ -1,20 +1,12 @@
-using System;
 using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Media;
-using Avalonia.Threading;
 
 namespace MashiruDaily.Controls;
 
-/// <summary>
-/// A SukiUI-styled bottom navigation bar for mobile. Items are laid out in
-/// equally sized columns; a soft "pill" indicator slides to the selected item
-/// using SukiUI's standard easing/duration resources.
-/// </summary>
 public class BottomNavigationBar : ItemsControl
 {
     public static readonly StyledProperty<int> SelectedIndexProperty =
@@ -26,7 +18,6 @@ public class BottomNavigationBar : ItemsControl
         set => SetValue(SelectedIndexProperty, value);
     }
 
-    private Border? _indicator;
     private INotifyCollectionChanged? _subscribedItems;
 
     public BottomNavigationBar()
@@ -37,7 +28,6 @@ public class BottomNavigationBar : ItemsControl
     static BottomNavigationBar()
     {
         SelectedIndexProperty.Changed.AddClassHandler<BottomNavigationBar>((bar, _) => bar.OnSelectedIndexChanged());
-        BoundsProperty.Changed.AddClassHandler<BottomNavigationBar>((bar, _) => bar.UpdateIndicator());
         ItemsSourceProperty.Changed.AddClassHandler<BottomNavigationBar>((bar, _) => bar.OnItemsSourceChanged());
     }
 
@@ -81,24 +71,15 @@ public class BottomNavigationBar : ItemsControl
         base.ClearContainerForItemOverride(container);
     }
 
-    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
-    {
-        base.OnApplyTemplate(e);
-        _indicator = e.NameScope.Get<Border>("PART_Indicator");
-        UpdateIndicator();
-    }
-
     private void OnItemsSourceChanged()
     {
         SubscribeItemsCollection();
         ClampSelection();
-        Dispatcher.UIThread.Post(UpdateIndicator);
     }
 
     private void OnItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         ClampSelection();
-        Dispatcher.UIThread.Post(UpdateIndicator);
     }
 
     private void OnSelectedIndexChanged()
@@ -108,8 +89,6 @@ public class BottomNavigationBar : ItemsControl
             if (ContainerFromIndex(i) is BottomNavigationItem navigationItem)
                 navigationItem.IsSelected = i == SelectedIndex;
         }
-
-        UpdateIndicator();
     }
 
     private void ClampSelection()
@@ -124,28 +103,6 @@ public class BottomNavigationBar : ItemsControl
             SelectedIndex = 0;
         else if (SelectedIndex >= Items.Count)
             SelectedIndex = Items.Count - 1;
-    }
-
-    private void UpdateIndicator()
-    {
-        var indicator = _indicator;
-        if (indicator is null)
-            return;
-
-        var count = Items.Count;
-        if (count == 0 || Bounds.Width <= 0)
-        {
-            indicator.IsVisible = count > 0;
-            return;
-        }
-
-        var index = Math.Clamp(SelectedIndex, 0, count - 1);
-        var columnWidth = Bounds.Width / count;
-        var pillWidth = double.IsNaN(indicator.Width) ? 52 : indicator.Width;
-        var x = index * columnWidth + (columnWidth - pillWidth) / 2d;
-
-        indicator.RenderTransform = new TranslateTransform(x, 0);
-        indicator.IsVisible = true;
     }
 
     private void OnItemTapped(object? sender, TappedEventArgs e)
