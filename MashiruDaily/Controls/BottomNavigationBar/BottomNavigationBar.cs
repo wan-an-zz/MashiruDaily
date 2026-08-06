@@ -7,6 +7,10 @@ using Avalonia.Interactivity;
 
 namespace MashiruDaily.Controls;
 
+/// <summary>
+/// A SukiUI-themed mobile bottom navigation bar in tab style. Items are laid out in equally sized columns;
+/// the selected item is highlighted with the primary color, a scale-up effect, and a bottom indicator, with press feedback.
+/// </summary>
 public class BottomNavigationBar : ItemsControl
 {
     public static readonly StyledProperty<int> SelectedIndexProperty =

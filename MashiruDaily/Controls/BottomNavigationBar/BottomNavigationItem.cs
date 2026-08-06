@@ -5,6 +5,10 @@ using Avalonia.Input;
 
 namespace MashiruDaily.Controls;
 
+/// <summary>
+/// A single tab entry that hosts arbitrary content such as an icon and label, driven by the owning bar's
+/// <see cref="IsSelected"/> state through selected and pressed pseudo-classes.
+/// </summary>
 public class BottomNavigationItem : ContentControl
 {
     public static readonly StyledProperty<bool> IsSelectedProperty =
