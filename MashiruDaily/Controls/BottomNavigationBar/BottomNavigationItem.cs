@@ -28,13 +28,17 @@ public class BottomNavigationItem : ContentControl
     {
         base.OnPointerPressed(e);
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
             PseudoClasses.Set(":pressed", true);
+            e.Pointer.Capture(this);
+        }
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
         PseudoClasses.Set(":pressed", false);
+        e.Pointer.Capture(null);
     }
 
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
