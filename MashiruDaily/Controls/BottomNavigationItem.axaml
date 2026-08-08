@@ -1,0 +1,73 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="using:MashiruDaily.Controls">
+
+    <ControlTheme x:Key="{x:Type controls:BottomNavigationItem}"
+                  TargetType="controls:BottomNavigationItem">
+        <Setter Property="Foreground" Value="{DynamicResource SukiLowText}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid Background="Transparent">
+                    <!-- 按压缩放反馈 -->
+                    <Grid.RenderTransform>
+                        <ScaleTransform />
+                    </Grid.RenderTransform>
+                    <Grid.Transitions>
+                        <Transitions>
+                            <TransformOperationsTransition Property="RenderTransform"
+                                                           Duration="{DynamicResource ShortAnimationDuration}">
+                                <TransformOperationsTransition.Easing>CubicEaseOut</TransformOperationsTransition.Easing>
+                            </TransformOperationsTransition>
+                        </Transitions>
+                    </Grid.Transitions>
+
+                    <!-- 内容：图标 + 标签 -->
+                    <ContentPresenter x:Name="PART_ContentPresenter"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}" />
+
+                    <!-- 底部指示条 -->
+                    <Border x:Name="PART_TabIndicator"
+                            Height="3"
+                            Width="24"
+                            CornerRadius="1.5"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Bottom"
+                            Margin="0,0,0,4"
+                            IsHitTestVisible="False"
+                            IsVisible="False"
+                            Background="{DynamicResource SukiPrimaryColor}" />
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+
+        <!-- 未选中态 -->
+        <Style Selector="^ /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Opacity" Value="0.65" />
+        </Style>
+        <!-- 选中态：完全显示 + 放大 -->
+        <Style Selector="^:selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="RenderTransform">
+                <ScaleTransform ScaleX="1.15" ScaleY="1.15" />
+            </Setter>
+        </Style>
+        <!-- 选中态前景色 -->
+        <Style Selector="^:selected">
+            <Setter Property="Foreground" Value="{DynamicResource SukiPrimaryColor}" />
+        </Style>
+        <!-- 选中态：显示底部指示条 -->
+        <Style Selector="^:selected /template/ Border#PART_TabIndicator">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+        <!-- 按压缩放 -->
+        <Style Selector="^:pressed /template/ Grid">
+            <Setter Property="RenderTransform">
+                <ScaleTransform ScaleX="0.95" ScaleY="0.95" />
+            </Setter>
+        </Style>
+    </ControlTheme>
+
+</ResourceDictionary>

@@ -1,42 +1,110 @@
+using System;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Data.Core;
-using Avalonia.Data.Core.Plugins;
-using System.Linq;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
+using MashiruDaily.Abstracts;
+using MashiruDaily.Logging;
+using MashiruDaily.Services;
 using MashiruDaily.ViewModels;
+using MashiruDaily.ViewModels.Todo;
 using MashiruDaily.Views;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using NLog.Extensions.Logging;
 
 namespace MashiruDaily;
 
 public partial class App : Application
 {
+    /// <summary>Root dependency injection container.</summary>
+    public static IServiceProvider Services { get; private set; } = null!;
+    private bool _isDrainingShutdown;
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
     }
 
-    public override void OnFrameworkInitializationCompleted()
+    public override async void OnFrameworkInitializationCompleted()
     {
+        Services = ConfigureServices();
+
+        var todoService = Services.GetRequiredService<ITodoService>();
+        await todoService.InitializeAsync();
+
+        var logger = Services.GetRequiredService<ILogger<App>>();
+        logger.LogInformation("MashiruDaily starting (desktop={IsDesktop}).",
+            ApplicationLifetime is IClassicDesktopStyleApplicationLifetime);
+
+        LogCjkFontResolution(logger);
+
+        var mainViewModel = Services.GetRequiredService<MainViewModel>();
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new MainWindow
-            {
-                DataContext = new MainViewModel()
-            };
+            desktop.ShutdownRequested += OnShutdownRequested;
+            desktop.MainWindow = new MainWindow { DataContext = mainViewModel };
         }
-        else if (ApplicationLifetime is IActivityApplicationLifetime singleViewFactoryApplicationLifetime)
+        else if (ApplicationLifetime is IActivityApplicationLifetime activityLifetime)
         {
-            singleViewFactoryApplicationLifetime.MainViewFactory = () => new MainView { DataContext = new MainViewModel() };
+            activityLifetime.MainViewFactory = () => new MainView { DataContext = mainViewModel };
         }
         else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewPlatform)
         {
-            singleViewPlatform.MainView = new MainView
-            {
-                DataContext = new MainViewModel()
-            };
+            singleViewPlatform.MainView = new MainView { DataContext = mainViewModel };
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private async void OnShutdownRequested(object? sender, ShutdownRequestedEventArgs e)
+    {
+        if (_isDrainingShutdown)
+            return;
+
+        _isDrainingShutdown = true;
+        e.Cancel = true;
+        var todoService = Services.GetRequiredService<ITodoService>();
+        await todoService.FlushAsync();
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+            desktop.Shutdown();
+    }
+
+    private static void LogCjkFontResolution(ILogger logger)
+    {
+        // Diagnostic: report which font actually provides CJK glyphs. '待' = U+5F85.
+        if (FontManager.Current.TryMatchCharacter(
+                '待', FontStyle.Normal, FontWeight.Normal, FontStretch.Normal,
+                FontFamily.Default, null, out var typeface))
+        {
+            logger.LogInformation("CJK glyph '待' resolved to font '{Font}'.", typeface.FontFamily.Name);
+        }
+        else
+        {
+            logger.LogWarning("CJK glyph '待' could not be resolved to any font.");
+        }
+    }
+
+    private static IServiceProvider ConfigureServices()
+    {
+        var services = new ServiceCollection();
+
+        services.AddLogging(builder =>
+        {
+            builder.ClearProviders();
+            builder.AddNLog();
+            LoggingConfigurator.Configure();
+        });
+
+        // Domain / infrastructure
+        services.AddSingleton<ITodoRepository, JsonTodoRepository>();
+        services.AddSingleton<ITodoService, TodoService>();
+
+        // View models
+        services.AddSingleton<TodoPageViewModel>();
+        services.AddSingleton<MainViewModel>();
+
+        return services.BuildServiceProvider();
     }
 }

@@ -1,5 +1,6 @@
 ﻿using System;
 using Avalonia;
+using MashiruDaily.Assets;
 
 namespace MashiruDaily.Desktop;
 
@@ -19,6 +20,9 @@ sealed class Program
 #if DEBUG
             .WithDeveloperTools()
 #endif
+            // Options must be bound before ConfigureFonts creates the FontManager.
+            .With(AppFonts.CreateFontManagerOptions())
+            .ConfigureFonts(fontManager => fontManager.AddFontCollection(new NotoSansSCFontCollection()))
             .WithInterFont()
             .LogToTrace();
 }

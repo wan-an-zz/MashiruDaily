@@ -1,0 +1,28 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="using:MashiruDaily.Controls">
+
+    <ControlTheme x:Key="{x:Type controls:BottomNavigationBar}"
+                  TargetType="controls:BottomNavigationBar">
+        <Setter Property="Height" Value="64" />
+        <Setter Property="ItemsPanel">
+            <ItemsPanelTemplate>
+                <UniformGrid Rows="1" />
+            </ItemsPanelTemplate>
+        </Setter>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="{DynamicResource SukiCardBackground}"
+                        BorderBrush="{DynamicResource SukiMediumBorderBrush}"
+                        BorderThickness="0,1,0,0"
+                        CornerRadius="18,18,0,0"
+                        BoxShadow="0 -4 12 0 #1A000000"
+                        ClipToBounds="True">
+                    <ItemsPresenter Name="PART_ItemsPresenter"
+                                    ItemsPanel="{TemplateBinding ItemsPanel}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
+</ResourceDictionary>

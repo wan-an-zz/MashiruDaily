@@ -1,12 +1,53 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:MashiruDaily.ViewModels"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:views="using:MashiruDaily.Views"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-        x:Class="MashiruDaily.Views.MainWindow"
-        Icon="/Assets/avalonia-logo.ico"
-        Title="MashiruDaily">
-        <views:MainView />
-</Window>
+<suki:SukiWindow xmlns="https://github.com/avaloniaui"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                 xmlns:assets="using:MashiruDaily.Assets"
+                 xmlns:models="using:MashiruDaily.Models"
+                 xmlns:suki="https://github.com/kikipoulet/SukiUI"
+                 xmlns:vm="using:MashiruDaily.ViewModels"
+                 mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="640"
+                 x:Class="MashiruDaily.Views.MainWindow"
+                 x:DataType="vm:MainViewModel"
+                 Title="MashiruDaily"
+                 Width="1000" Height="640"
+                 MinWidth="760" MinHeight="480"
+                 WindowState="Maximized"
+                 CanResize="True"
+                 BackgroundStyle="GradientSoft">
+
+    <suki:SukiWindow.LogoContent>
+        <PathIcon Data="{x:Static assets:AppIcons.Todo}"
+                  Width="18" Height="18"
+                  Foreground="{DynamicResource SukiPrimaryColor}" />
+    </suki:SukiWindow.LogoContent>
+
+    <suki:SukiSideMenu ItemsSource="{Binding NavigationItems}"
+                       SelectedItem="{Binding ActiveItem, Mode=TwoWay}"
+                       Content="{Binding ActiveItem.Page}"
+                       UseCustomContent="True"
+                       OpenPaneLength="230"
+                       IsSearchEnabled="False">
+
+        <suki:SukiSideMenu.ItemTemplate>
+            <DataTemplate x:DataType="models:NavigationItem">
+                <suki:SukiSideMenuItem Header="{Binding Header}"
+                                       PageContent="{Binding Page}">
+                    <suki:SukiSideMenuItem.Icon>
+                        <PathIcon Data="{Binding Icon}" Width="16" Height="16" />
+                    </suki:SukiSideMenuItem.Icon>
+                </suki:SukiSideMenuItem>
+            </DataTemplate>
+        </suki:SukiSideMenu.ItemTemplate>
+
+        <suki:SukiSideMenu.HeaderContent>
+            <StackPanel Margin="22,18" Spacing="4">
+                <TextBlock Text="MashiruDaily"
+                           FontSize="18"
+                           FontWeight="Bold"
+                           Foreground="{DynamicResource SukiPrimaryColor}" />
+            </StackPanel>
+        </suki:SukiSideMenu.HeaderContent>
+    </suki:SukiSideMenu>
+
+</suki:SukiWindow>

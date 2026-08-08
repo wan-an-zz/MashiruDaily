@@ -8,4 +8,5 @@
     <Deploy />
   </Project>
   <Project Path="MashiruDaily/MashiruDaily.csproj" />
+  <Project Path="MashiruDaily.Tests/MashiruDaily.Tests.csproj"/>
 </Solution>
