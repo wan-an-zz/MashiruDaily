@@ -1,6 +1,18 @@
 # AGENTS.md
 
-Avalonia 12.1 cross-platform app (net10.0) using SukiUI theming, MVVM + DI, NLog. Solution: `MashiruDaily.slnx`. Branch convention: feature branches (currently `feature/TODO列表`), Chinese conventional-commit messages.
+Avalonia 12.1 cross-platform app (net10.0) using SukiUI theming, MVVM + DI, NLog. Solution: `MashiruDaily.slnx`. Branch convention: feature branches (currently `feature/TODO列表`).
+
+## Git 提交规范
+
+提交信息遵循[约定式提交规范](https://www.conventionalcommits.org/zh-hans/v1.0.0/)：
+
+```
+<type>: <描述>
+```
+
+- `<type>` 使用英文标准类型：`feat`（新功能）、`fix`（修复）、`refactor`（重构）、`docs`（文档）、`test`（测试）、`chore`（杂务/构建/配置）、`perf`（性能）、`build`（构建）、`ci`（CI）、`style`（格式）、`revert`（回滚）。
+- `<描述>` 使用中文，简洁说明本次改动；`type:` 后必须有一个空格。
+- 示例：`feat: 新增 JsonTodoRepository，JSON 持久化到 ApplicationData`、`fix: 落盘改为值快照并支持关闭时冲刷`。
 
 ## Build / run
 
