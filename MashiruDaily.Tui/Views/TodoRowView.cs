@@ -1,4 +1,6 @@
 using MashiruDaily.ViewModels.Todo;
+using Terminal.Gui.Configuration;
+using Terminal.Gui.Drawing;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
@@ -34,6 +36,13 @@ internal sealed class TodoRowView : View
             Y = 0,
             Width = Dim.Fill(9),
         };
+
+        if (vm.IsCompleted)
+        {
+            Scheme baseScheme = SchemeManager.GetScheme(Schemes.Base);
+            SchemeManager.AddScheme("muted", new Scheme { Normal = baseScheme.Disabled });
+            titleLabel.SchemeName = "muted";
+        }
 
         DeleteButton = new Button
         {
