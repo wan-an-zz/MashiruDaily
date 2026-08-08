@@ -40,18 +40,32 @@ internal sealed class TodoColumnView : View
 
         _source.CollectionChanged += OnSourceChanged;
 
-        AddCommand(Command.Up, MoveSelectionUp);
-        AddCommand(Command.Down, MoveSelectionDown);
+        // Space 勾选：列自身有焦点时由框架默认的 Space→Command.Toggle 绑定触发
+        // （Terminal.Gui 已提供，显式再绑定会抛重复绑定异常）；焦点在行的
+        // CheckBox 上时由 CheckBox 自身的 Space→Activate 触发。
         AddCommand(Command.Toggle, ToggleSelected);
-        AddCommand(Command.Right, FocusRight);
-        AddCommand(Command.NextTabStop, FocusRight);
-        KeyBindings.Add(Key.CursorUp, Command.Up);
-        KeyBindings.Add(Key.CursorDown, Command.Down);
-        KeyBindings.Add(Key.CursorRight, Command.Right);
-        KeyBindings.Add(Key.Tab, Command.NextTabStop);
+
+        // 按键经 KeyDown 事件冒泡到本列处理，而非 KeyBindings：
+        // 真实运行中焦点落在行的 CheckBox/删除按钮等子视图上，列的 KeyBindings
+        // 仅在列自身有焦点时才生效（Terminal.Gui 文档），导致 ↑/↓/Tab/→ 无反应。
         KeyDown += (_, e) =>
         {
-            if (e == Key.D || e == Key.Delete)
+            if (e == Key.CursorUp)
+            {
+                MoveSelectionUp();
+                e.Handled = true;
+            }
+            else if (e == Key.CursorDown)
+            {
+                MoveSelectionDown();
+                e.Handled = true;
+            }
+            else if (e == Key.CursorRight || e == Key.Tab)
+            {
+                FocusRight();
+                e.Handled = true;
+            }
+            else if (e == Key.D || e == Key.Delete)
             {
                 DeleteSelected();
                 e.Handled = true;

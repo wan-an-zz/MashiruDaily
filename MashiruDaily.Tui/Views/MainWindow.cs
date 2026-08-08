@@ -32,8 +32,11 @@ internal sealed class MainWindow : Runnable
         sidebar.Add(todoNav);
 
         // --- 右侧内容区 ------------------------------------------------------
+        // CanFocus 必须为 true：否则会切断从根到列的焦点链，初始焦点落到
+        // StatusBar 上，列/行的 KeyDown 与按键全部收不到（仅应用级 Esc 有效）。
         View content = new()
         {
+            CanFocus = true,
             X = Pos.Right(sidebar),
             Y = 0,
             Width = Dim.Fill(),
@@ -78,5 +81,7 @@ internal sealed class MainWindow : Runnable
 
         Add(sidebar, content, status);
 
+        // 初始焦点放到待完成列，否则默认落在 StatusBar，列收不到按键。
+        _pendingColumn.SetFocus();
     }
 }
