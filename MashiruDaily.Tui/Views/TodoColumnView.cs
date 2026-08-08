@@ -20,6 +20,8 @@ internal sealed class TodoColumnView : View
     private readonly View _listArea;
     private int _selectedIndex;
 
+    public event Action? FocusNextColumnRequested;
+
     public TodoColumnView(string header, ObservableCollection<TodoItemViewModel> source)
     {
         _header = header;
@@ -41,8 +43,12 @@ internal sealed class TodoColumnView : View
         AddCommand(Command.Up, MoveSelectionUp);
         AddCommand(Command.Down, MoveSelectionDown);
         AddCommand(Command.Toggle, ToggleSelected);
+        AddCommand(Command.Right, FocusRight);
+        AddCommand(Command.NextTabStop, FocusRight);
         KeyBindings.Add(Key.CursorUp, Command.Up);
         KeyBindings.Add(Key.CursorDown, Command.Down);
+        KeyBindings.Add(Key.CursorRight, Command.Right);
+        KeyBindings.Add(Key.Tab, Command.NextTabStop);
         KeyDown += (_, e) =>
         {
             if (e == Key.D || e == Key.Delete)
@@ -112,6 +118,38 @@ internal sealed class TodoColumnView : View
             _source[_selectedIndex].ToggleCommand.Execute(null);
 
         return true;
+    }
+
+    private bool? FocusRight()
+    {
+        TodoRowView? selectedRow = GetSelectedRow();
+        if (selectedRow is null || selectedRow.DeleteButton.HasFocus)
+        {
+            FocusNextColumnRequested?.Invoke();
+            return true;
+        }
+
+        selectedRow.DeleteButton.SetFocus();
+        return true;
+    }
+
+    public void FocusSelectedRow()
+    {
+        TodoRowView? selectedRow = GetSelectedRow();
+        if (selectedRow is null)
+        {
+            SetFocus();
+            return;
+        }
+
+        selectedRow.CheckBoxControl.SetFocus();
+    }
+
+    private TodoRowView? GetSelectedRow()
+    {
+        return _listArea.SubViews
+            .OfType<TodoRowView>()
+            .ElementAtOrDefault(_selectedIndex);
     }
 
     private bool? DeleteSelected()
