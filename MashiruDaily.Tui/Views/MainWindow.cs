@@ -47,7 +47,7 @@ internal sealed class MainWindow : Runnable
             Y = 1,
         };
 
-        _pendingColumn = new TodoColumnView("待完成", _viewModel.PendingCount)
+        _pendingColumn = new TodoColumnView("待完成", _viewModel.PendingTodos)
         {
             X = 1,
             Y = Pos.Bottom(title) + 1,
@@ -55,7 +55,7 @@ internal sealed class MainWindow : Runnable
             Height = Dim.Fill() - 3,
         };
 
-        _completedColumn = new TodoColumnView("已完成", _viewModel.CompletedCount)
+        _completedColumn = new TodoColumnView("已完成", _viewModel.CompletedTodos)
         {
             X = Pos.Right(_pendingColumn) + 2,
             Y = Pos.Bottom(title) + 1,
@@ -75,8 +75,5 @@ internal sealed class MainWindow : Runnable
 
         Add(sidebar, content, status);
 
-        // 订阅视图模型变化，刷新计数
-        _viewModel.PendingTodos.CollectionChanged += (_, _) => _pendingColumn.UpdateCount(_viewModel.PendingCount);
-        _viewModel.CompletedTodos.CollectionChanged += (_, _) => _completedColumn.UpdateCount(_viewModel.CompletedCount);
     }
 }
