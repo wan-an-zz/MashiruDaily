@@ -47,7 +47,7 @@ internal sealed class MainWindow : Runnable
             Y = 1,
         };
 
-        _pendingColumn = new TodoColumnView("待完成", 0)
+        _pendingColumn = new TodoColumnView("待完成", _viewModel.PendingCount)
         {
             X = 1,
             Y = Pos.Bottom(title) + 1,
@@ -55,7 +55,7 @@ internal sealed class MainWindow : Runnable
             Height = Dim.Fill() - 3,
         };
 
-        _completedColumn = new TodoColumnView("已完成", 0)
+        _completedColumn = new TodoColumnView("已完成", _viewModel.CompletedCount)
         {
             X = Pos.Right(_pendingColumn) + 2,
             Y = Pos.Bottom(title) + 1,
