@@ -25,7 +25,7 @@ Avalonia 12.1 cross-platform app (net10.0) using SukiUI theming, MVVM + DI, NLog
 ## Architecture (key files)
 
 - `Abstracts/` — the only interfaces (`ITodoService`, `ITodoRepository`, `INavigationItem`); depends on `Models/` and `ViewModels/`.
-- `Services/` — concrete `TodoService` (single source of truth, raises `Changed`), `InMemoryTodoRepository` (no persistence yet).
+- `Services/` — concrete `TodoService` (single source of truth, raises `Changed`), `JsonTodoRepository` (JSON 持久化到 ApplicationData).
 - `ViewModels/` — `MainViewModel` (navigation items list shared by desktop + Android), `Todo/TodoPageViewModel` + `TodoItemViewModel` (inline edit state).
 - `Views/` — `MainWindow` (desktop: SukiWindow + SukiSideMenu), `MainView` (Android: BottomNavigationBar), shared `Todo/TodoPageView`.
 - `Views/` use `ViewLocator` (reflection: `ViewModel`→`View`); keep a `XxxViewModel`/`XxxView` pair in parallel namespaces or the page won't resolve.
