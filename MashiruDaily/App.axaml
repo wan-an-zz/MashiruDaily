@@ -10,8 +10,8 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <!-- Custom controls that extend SukiUI -->
-                <ResourceInclude Source="/Controls/BottomNavigationBar/BottomNavigationBar.axaml" />
-                <ResourceInclude Source="/Controls/BottomNavigationBar/BottomNavigationItem.axaml" />
+                <ResourceInclude Source="/Controls/BottomNavigationBar.axaml" />
+                <ResourceInclude Source="/Controls/BottomNavigationItem.axaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

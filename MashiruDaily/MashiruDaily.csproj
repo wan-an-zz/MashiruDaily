@@ -25,4 +25,15 @@
         <PackageReference Include="NLog"/>
         <PackageReference Include="NLog.Extensions.Logging"/>
     </ItemGroup>
+
+    <ItemGroup>
+      <Compile Update="Controls\BottomNavigationBar.axaml.cs">
+        <DependentUpon>BottomNavigationBar.axaml</DependentUpon>
+        <SubType>Code</SubType>
+      </Compile>
+      <Compile Update="Controls\BottomNavigationItem.axaml.cs">
+        <DependentUpon>BottomNavigationItem.axaml</DependentUpon>
+        <SubType>Code</SubType>
+      </Compile>
+    </ItemGroup>
 </Project>
