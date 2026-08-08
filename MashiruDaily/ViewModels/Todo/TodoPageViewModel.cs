@@ -31,6 +31,7 @@ public partial class TodoPageViewModel : ViewModelBase
     public ObservableCollection<TodoItemViewModel> CompletedTodos { get; } = new();
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddCommand))]
     private string _newTodoTitle = string.Empty;
 
     [ObservableProperty]
@@ -45,13 +46,15 @@ public partial class TodoPageViewModel : ViewModelBase
     [ObservableProperty]
     private bool _hasCompleted;
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanAdd))]
     private async Task Add()
     {
         var title = NewTodoTitle;
         NewTodoTitle = string.Empty;
         await _service.AddAsync(title);
     }
+
+    private bool CanAdd() => !String.IsNullOrEmpty(NewTodoTitle);
 
     private void OnServiceChanged(object? sender, EventArgs e)
     {
