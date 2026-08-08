@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using MashiruDaily.ViewModels.Todo;
+using Terminal.Gui.App;
+using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
@@ -16,6 +18,7 @@ internal sealed class TodoColumnView : View
     private readonly ObservableCollection<TodoItemViewModel> _source;
     private readonly Label _headerLabel;
     private readonly View _listArea;
+    private int _selectedIndex;
 
     public TodoColumnView(string header, ObservableCollection<TodoItemViewModel> source)
     {
@@ -34,6 +37,21 @@ internal sealed class TodoColumnView : View
         Add(_headerLabel, _listArea);
 
         _source.CollectionChanged += OnSourceChanged;
+
+        AddCommand(Command.Up, MoveSelectionUp);
+        AddCommand(Command.Down, MoveSelectionDown);
+        AddCommand(Command.Toggle, ToggleSelected);
+        KeyBindings.Add(Key.CursorUp, Command.Up);
+        KeyBindings.Add(Key.CursorDown, Command.Down);
+        KeyDown += (_, e) =>
+        {
+            if (e == Key.D || e == Key.Delete)
+            {
+                DeleteSelected();
+                e.Handled = true;
+            }
+        };
+
         Rebuild();
     }
 
@@ -41,6 +59,11 @@ internal sealed class TodoColumnView : View
 
     private void Rebuild()
     {
+        if (_source.Count == 0)
+            _selectedIndex = 0;
+        else if (_selectedIndex >= _source.Count)
+            _selectedIndex = _source.Count - 1;
+
         _listArea.RemoveAll();
 
         int y = 0;
@@ -53,10 +76,69 @@ internal sealed class TodoColumnView : View
                 Width = Dim.Fill(),
                 Height = 1,
             };
+            row.SetSelected(y == _selectedIndex);
             _listArea.Add(row);
             y++;
         }
 
         _headerLabel.Text = $"{_header} ({_source.Count})";
+    }
+
+    private bool? MoveSelectionUp()
+    {
+        if (_selectedIndex > 0)
+        {
+            _selectedIndex--;
+            HighlightSelected();
+        }
+
+        return true;
+    }
+
+    private bool? MoveSelectionDown()
+    {
+        if (_selectedIndex < _source.Count - 1)
+        {
+            _selectedIndex++;
+            HighlightSelected();
+        }
+
+        return true;
+    }
+
+    private bool? ToggleSelected()
+    {
+        if (_selectedIndex >= 0 && _selectedIndex < _source.Count)
+            _source[_selectedIndex].ToggleCommand.Execute(null);
+
+        return true;
+    }
+
+    private bool? DeleteSelected()
+    {
+        if (_selectedIndex < 0 || _selectedIndex >= _source.Count)
+            return true;
+
+        var vm = _source[_selectedIndex];
+        var result = MessageBox.Query(
+            App!,
+            "确认删除",
+            $"确定删除「{vm.Title}」吗？",
+            "取消",
+            "删除");
+        if (result == 1)
+            vm.DeleteCommand.Execute(null);
+
+        return true;
+    }
+
+    private void HighlightSelected()
+    {
+        var rows = _listArea.SubViews.ToArray();
+        for (int i = 0; i < rows.Length; i++)
+        {
+            if (rows[i] is TodoRowView row)
+                row.SetSelected(i == _selectedIndex);
+        }
     }
 }

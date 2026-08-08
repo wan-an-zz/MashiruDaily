@@ -9,6 +9,8 @@ namespace MashiruDaily.Tui.Views;
 /// <summary>一行待办：勾选框 + 标题 + [删除] 按钮。已完成行标题置灰。</summary>
 internal sealed class TodoRowView : View
 {
+    private readonly Label _titleLabel;
+
     public TodoItemViewModel ViewModel { get; }
 
     public CheckBox CheckBoxControl { get; }
@@ -29,7 +31,7 @@ internal sealed class TodoRowView : View
             CanFocus = true,
         };
 
-        Label titleLabel = new()
+        _titleLabel = new Label
         {
             Text = vm.Title,
             X = Pos.Right(CheckBoxControl) + 1,
@@ -41,7 +43,7 @@ internal sealed class TodoRowView : View
         {
             Scheme baseScheme = SchemeManager.GetScheme(Schemes.Base);
             SchemeManager.AddScheme("muted", new Scheme { Normal = baseScheme.Disabled });
-            titleLabel.SchemeName = "muted";
+            _titleLabel.SchemeName = "muted";
         }
 
         DeleteButton = new Button
@@ -53,6 +55,14 @@ internal sealed class TodoRowView : View
             CanFocus = true,
         };
 
-        Add(CheckBoxControl, titleLabel, DeleteButton);
+        Add(CheckBoxControl, _titleLabel, DeleteButton);
+
+        CheckBoxControl.ValueChanged += (_, _) => ViewModel.ToggleCommand.Execute(null);
+        DeleteButton.Accepted += (_, _) => ViewModel.DeleteCommand.Execute(null);
+    }
+
+    public void SetSelected(bool selected)
+    {
+        _titleLabel.Text = selected ? $"> {ViewModel.Title}" : $"  {ViewModel.Title}";
     }
 }
