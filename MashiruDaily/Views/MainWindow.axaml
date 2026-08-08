@@ -12,6 +12,7 @@
                  Title="MashiruDaily"
                  Width="1000" Height="640"
                  MinWidth="760" MinHeight="480"
+                 WindowState="Maximized"
                  CanResize="True"
                  BackgroundStyle="GradientSoft">
 
@@ -45,9 +46,6 @@
                            FontSize="18"
                            FontWeight="Bold"
                            Foreground="{DynamicResource SukiPrimaryColor}" />
-                <TextBlock Text="每日待办"
-                           FontSize="12"
-                           Foreground="{DynamicResource SukiLowText}" />
             </StackPanel>
         </suki:SukiSideMenu.HeaderContent>
     </suki:SukiSideMenu>

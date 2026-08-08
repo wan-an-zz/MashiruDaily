@@ -19,7 +19,7 @@ public partial class MainViewModel : ViewModelBase
         TodoPage = todoPage;
         NavigationItems = new ObservableCollection<INavigationItem>
         {
-            new NavigationItem("Todo", AppIcons.Todo, todoPage),
+            new NavigationItem("Todo List", AppIcons.Todo, todoPage),
         };
 
         _activeItem = NavigationItems[0];
