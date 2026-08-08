@@ -18,6 +18,7 @@ await todoService.InitializeAsync();
 var viewModel = services.GetRequiredService<TodoPageViewModel>();
 
 IApplication app = Application.Create();
+app.Init();
 try
 {
     app.Run(new MainWindow(viewModel));
