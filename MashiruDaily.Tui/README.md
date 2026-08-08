@@ -1,29 +1,20 @@
-# My Terminal.Gui App
+# MashiruDaily TUI
 
-A complete Terminal User Interface (TUI) app built with [Terminal.Gui](https://github.com/tui-cs/Terminal.Gui) **v2** — a menu bar, a status bar, and interactive content.
+基于 [Terminal.Gui v2](https://github.com/tui-cs/Terminal.Gui) 的 MashiruDaily Todo
+终端界面。左侧是 Todo List 导航，右侧显示 Todo 标题以及“待完成”和“已完成”两栏；每行包含
+勾选框、标题和删除按钮。
 
 ```bash
-dotnet run        # launch (menu File>Quit or the status bar exits)
-dotnet build      # compile only
+dotnet run --project MashiruDaily.Tui
+dotnet build MashiruDaily.Tui
 ```
 
-Generate with `dotnet new tui --WithTests` to also scaffold a `Tests/` project with **headless**
-example tests (`dotnet test Tests`) — a fast red-green loop you can run without a terminal.
+操作：
 
-## Project layout
-| File | Purpose |
-|---|---|
-| `Program.cs` | App entry point + the root `MainWindow` (menu, status bar, content). Add your views to `content`. |
-| `AGENTS.md` | **Canonical Terminal.Gui v2 patterns + gotchas for AI agents and humans.** Start here. |
-| `CLAUDE.md` | Thin pointer to `AGENTS.md` for Claude / Claude Code. |
-| `.cursorrules` / `.windsurfrules` / `.aider.md` | Auto-loaded rules for Cursor / Windsurf / Aider — short banner that points at `AGENTS.md`. |
-| `*.csproj` | Targets `net10.0`, references `Terminal.Gui`. |
+- `↑` / `↓`：选择当前栏的 Todo
+- `Space`：切换完成状态
+- `Tab` / `→`：在当前行、删除按钮和另一列表之间循环移动焦点
+- `D` / `Delete`：确认并删除当前选中的 Todo；也可直接聚焦删除按钮后回车
+- `Esc`：退出并冲刷数据
 
-## Building with an AI agent?
-Terminal.Gui v2 is a complete rewrite — most examples online (and in model training data)
-are **v1 and won't compile**. **Read [`AGENTS.md`](./AGENTS.md) first** for the canonical
-patterns, the v1→v2 corrections table, `Pos`/`Dim` layout, and common pitfalls.
-
-## Learn more
-- Getting started: https://tui-cs.github.io/Terminal.Gui/
-- Repository & samples: https://github.com/tui-cs/Terminal.Gui
+TUI 与桌面应用共享 Core 后端和 `todos.json` 数据，因此两端看到的是同一份 Todo。
