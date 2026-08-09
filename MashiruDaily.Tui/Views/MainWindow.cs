@@ -1,0 +1,84 @@
+using MashiruDaily.ViewModels.Todo;
+using Terminal.Gui.App;
+using Terminal.Gui.Input;
+using Terminal.Gui.ViewBase;
+using Terminal.Gui.Views;
+
+namespace MashiruDaily.Tui.Views;
+
+internal sealed class MainWindow : Runnable
+{
+    private readonly TodoPageViewModel _viewModel;
+    private readonly TodoColumnView _pendingColumn;
+    private readonly TodoColumnView _completedColumn;
+
+    public MainWindow(TodoPageViewModel viewModel)
+    {
+        _viewModel = viewModel;
+        Title = "MashiruDaily - Todo";
+
+        // --- 左侧边栏 --------------------------------------------------------
+        View sidebar = new()
+        {
+            Width = 16,
+            Height = Dim.Fill(),
+        };
+        Label todoNav = new()
+        {
+            Text = "▶ Todo List",
+            X = 1,
+            Y = 1,
+        };
+        sidebar.Add(todoNav);
+
+        // --- 右侧内容区 ------------------------------------------------------
+        // CanFocus 必须为 true：否则会切断从根到列的焦点链，初始焦点落到
+        // StatusBar 上，列/行的 KeyDown 与按键全部收不到（仅应用级 Esc 有效）。
+        View content = new()
+        {
+            CanFocus = true,
+            X = Pos.Right(sidebar),
+            Y = 0,
+            Width = Dim.Fill(),
+            Height = Dim.Fill(),
+        };
+
+        Label title = new()
+        {
+            Text = "Todo",
+            X = 1,
+            Y = 1,
+        };
+
+        _pendingColumn = new TodoColumnView("待完成", _viewModel.PendingTodos)
+        {
+            X = 1,
+            Y = Pos.Bottom(title) + 1,
+            Width = Dim.Percent(50) - 2,
+            Height = Dim.Fill() - 3,
+        };
+
+        _completedColumn = new TodoColumnView("已完成", _viewModel.CompletedTodos)
+        {
+            X = Pos.Right(_pendingColumn) + 2,
+            Y = Pos.Bottom(title) + 1,
+            Width = Dim.Fill() - 3,
+            Height = Dim.Fill() - 3,
+        };
+
+        content.Add(title, _pendingColumn, _completedColumn);
+
+        // --- 状态栏（按键提示） ---------------------------------------------
+        StatusBar status = new();
+        status.Add(new Shortcut(Key.CursorUp, "选择", null));
+        status.Add(new Shortcut(Key.CursorDown, "选择", null));
+        status.Add(new Shortcut(Key.Space, "勾选", null));
+        status.Add(new Shortcut(Key.D, "删除", null));
+        status.Add(new Shortcut(Application.GetDefaultKey(Command.Quit), "退出", () => App?.RequestStop()));
+
+        Add(sidebar, content, status);
+
+        // 初始焦点放到待完成列，否则默认落在 StatusBar，列收不到按键。
+        _pendingColumn.SetFocus();
+    }
+}

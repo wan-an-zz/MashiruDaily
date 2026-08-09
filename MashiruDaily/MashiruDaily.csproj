@@ -36,4 +36,8 @@
         <SubType>Code</SubType>
       </Compile>
     </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\MashiruDaily.Core\MashiruDaily.Core.csproj"/>
+    </ItemGroup>
 </Project>
