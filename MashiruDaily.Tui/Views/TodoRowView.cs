@@ -6,7 +6,7 @@ using Terminal.Gui.Views;
 
 namespace MashiruDaily.Tui.Views;
 
-/// <summary>一行待办：勾选框 + 标题 + [删除] 按钮。已完成行标题置灰。</summary>
+/// <summary>一行待办：勾选框 + 标题。已完成行标题置灰。</summary>
 internal sealed class TodoRowView : View
 {
     private readonly Label _titleLabel;
@@ -14,8 +14,6 @@ internal sealed class TodoRowView : View
     public TodoItemViewModel ViewModel { get; }
 
     public CheckBox CheckBoxControl { get; }
-
-    public Button DeleteButton { get; }
 
     public TodoRowView(TodoItemViewModel vm)
     {
@@ -36,7 +34,7 @@ internal sealed class TodoRowView : View
             Text = vm.Title,
             X = Pos.Right(CheckBoxControl) + 1,
             Y = 0,
-            Width = Dim.Fill(9),
+            Width = Dim.Fill(),
         };
 
         if (vm.IsCompleted)
@@ -46,19 +44,9 @@ internal sealed class TodoRowView : View
             _titleLabel.SchemeName = "muted";
         }
 
-        DeleteButton = new Button
-        {
-            Text = "删除",
-            X = Pos.AnchorEnd(),
-            Y = 0,
-            Width = 6,
-            CanFocus = true,
-        };
-
-        Add(CheckBoxControl, _titleLabel, DeleteButton);
+        Add(CheckBoxControl, _titleLabel);
 
         CheckBoxControl.ValueChanged += (_, _) => ViewModel.ToggleCommand.Execute(null);
-        DeleteButton.Accepted += (_, _) => ViewModel.DeleteCommand.Execute(null);
     }
 
     public void SetSelected(bool selected)

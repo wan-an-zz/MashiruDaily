@@ -20,8 +20,6 @@ internal sealed class TodoColumnView : View
     private readonly View _listArea;
     private int _selectedIndex;
 
-    public event Action? FocusNextColumnRequested;
-
     public TodoColumnView(string header, ObservableCollection<TodoItemViewModel> source)
     {
         _header = header;
@@ -39,6 +37,8 @@ internal sealed class TodoColumnView : View
         Add(_headerLabel, _listArea);
 
         _source.CollectionChanged += OnSourceChanged;
+
+        HasFocusChanged += (_, _) => HighlightSelected();
         
         KeyDown += (_, e) =>
         {
@@ -50,11 +50,6 @@ internal sealed class TodoColumnView : View
             else if (e == Key.CursorDown)
             {
                 MoveSelectionDown();
-                e.Handled = true;
-            }
-            else if (e == Key.CursorRight || e == Key.Tab)
-            {
-                FocusRight();
                 e.Handled = true;
             }
             else if (e == Key.D || e == Key.Delete)
@@ -93,7 +88,7 @@ internal sealed class TodoColumnView : View
                 Width = Dim.Fill(),
                 Height = 1,
             };
-            row.SetSelected(y == _selectedIndex);
+            row.SetSelected(y == _selectedIndex && HasFocus);
             _listArea.Add(row);
             y++;
         }
@@ -131,38 +126,6 @@ internal sealed class TodoColumnView : View
         return true;
     }
 
-    private bool? FocusRight()
-    {
-        TodoRowView? selectedRow = GetSelectedRow();
-        if (selectedRow is null || selectedRow.DeleteButton.HasFocus)
-        {
-            FocusNextColumnRequested?.Invoke();
-            return true;
-        }
-
-        selectedRow.DeleteButton.SetFocus();
-        return true;
-    }
-
-    public void FocusSelectedRow()
-    {
-        TodoRowView? selectedRow = GetSelectedRow();
-        if (selectedRow is null)
-        {
-            SetFocus();
-            return;
-        }
-
-        selectedRow.CheckBoxControl.SetFocus();
-    }
-
-    private TodoRowView? GetSelectedRow()
-    {
-        return _listArea.SubViews
-            .OfType<TodoRowView>()
-            .ElementAtOrDefault(_selectedIndex);
-    }
-
     private bool? DeleteSelected()
     {
         if (_selectedIndex < 0 || _selectedIndex >= _source.Count)
@@ -187,7 +150,7 @@ internal sealed class TodoColumnView : View
         for (int i = 0; i < rows.Length; i++)
         {
             if (rows[i] is TodoRowView row)
-                row.SetSelected(i == _selectedIndex);
+                row.SetSelected(i == _selectedIndex && HasFocus);
         }
     }
 }

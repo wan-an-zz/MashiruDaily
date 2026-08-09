@@ -66,9 +66,6 @@ internal sealed class MainWindow : Runnable
             Height = Dim.Fill() - 3,
         };
 
-        _pendingColumn.FocusNextColumnRequested += () => _completedColumn.FocusSelectedRow();
-        _completedColumn.FocusNextColumnRequested += () => _pendingColumn.FocusSelectedRow();
-
         content.Add(title, _pendingColumn, _completedColumn);
 
         // --- 状态栏（按键提示） ---------------------------------------------
