@@ -1,9 +1,12 @@
 ﻿using System.Collections.ObjectModel;
+using System.Threading.Tasks;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using MashiruDaily.Abstracts;
 using MashiruDaily.Assets;
 using MashiruDaily.Models;
 using MashiruDaily.ViewModels.Todo;
+using CommunityToolkit.Mvvm.Input;
 
 namespace MashiruDaily.ViewModels;
 
@@ -14,13 +17,29 @@ namespace MashiruDaily.ViewModels;
 /// </summary>
 public partial class MainViewModel : ViewModelBase
 {
-    public MainViewModel(TodoPageViewModel todoPage)
+    private readonly IHermesSyncService _syncService;
+
+    public MainViewModel(TodoPageViewModel todoPage, SettingsPageViewModel settingsPage, IHermesSyncService syncService)
     {
+        _syncService = syncService;
         TodoPage = todoPage;
         NavigationItems = new ObservableCollection<INavigationItem>
         {
             new NavigationItem("Todo List", AppIcons.Todo, todoPage),
+            new NavigationItem("设置", AppIcons.Settings, settingsPage),
         };
+
+        syncService.StatusChanged += (_, _) => Dispatcher.UIThread.Post(() =>
+        {
+            SyncStatusText = syncService.Status switch
+            {
+                SyncStatus.Idle => "空闲", SyncStatus.Syncing => "同步中", SyncStatus.Pulling => "拉取中",
+                SyncStatus.Success => "已同步", SyncStatus.Error => "同步失败", SyncStatus.Skipped => "已跳过",
+                _ => "空闲",
+            };
+            HasSyncError = syncService.Status == SyncStatus.Error;
+            PendingSyncCount = syncService.PendingSyncCount;
+        });
 
         _activeItem = NavigationItems[0];
         _activeIndex = 0;
@@ -29,6 +48,13 @@ public partial class MainViewModel : ViewModelBase
     public TodoPageViewModel TodoPage { get; }
 
     public ObservableCollection<INavigationItem> NavigationItems { get; }
+
+    [ObservableProperty] private string _syncStatusText = "空闲";
+    [ObservableProperty] private bool _hasSyncError;
+    [ObservableProperty] private int _pendingSyncCount;
+
+    [RelayCommand]
+    private Task SyncNow() => _syncService.SyncNowAsync();
 
     [ObservableProperty]
     private INavigationItem? _activeItem;

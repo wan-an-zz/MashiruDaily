@@ -1,4 +1,6 @@
 using System;
+using System.Net.Http;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
@@ -34,13 +36,15 @@ public partial class App : Application
         await todoService.InitializeAsync();
 
         var logger = Services.GetRequiredService<ILogger<App>>();
+
+        // Fire-and-forget Hermes startup sync; never block UI startup on the network.
+        _ = SyncStartupAsync(Services.GetRequiredService<IHermesSyncService>(), logger);
         logger.LogInformation("MashiruDaily starting (desktop={IsDesktop}).",
             ApplicationLifetime is IClassicDesktopStyleApplicationLifetime);
 
         LogCjkFontResolution(logger);
 
         var mainViewModel = Services.GetRequiredService<MainViewModel>();
-
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.ShutdownRequested += OnShutdownRequested;
@@ -67,8 +71,32 @@ public partial class App : Application
         e.Cancel = true;
         var todoService = Services.GetRequiredService<ITodoService>();
         await todoService.FlushAsync();
+
+        // Best-effort drain of pending Hermes webhook events on exit; never block shutdown.
+        try
+        {
+            await Services.GetRequiredService<IHermesSyncService>().FlushAsync();
+        }
+        catch (Exception ex)
+        {
+            Services.GetRequiredService<ILogger<App>>()
+                .LogError(ex, "Hermes sync flush on shutdown failed.");
+        }
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             desktop.Shutdown();
+    }
+
+    private static async Task SyncStartupAsync(IHermesSyncService sync, ILogger logger)
+    {
+        try
+        {
+            await sync.InitializeAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Hermes sync initialization failed.");
+        }
     }
 
     private static void LogCjkFontResolution(ILogger logger)
@@ -101,8 +129,14 @@ public partial class App : Application
         services.AddSingleton<ITodoRepository, JsonTodoRepository>();
         services.AddSingleton<ITodoService, TodoService>();
 
+        // Hermes sync
+        services.AddSingleton<HttpClient>();
+        services.AddSingleton<IHermesSettingsRepository, JsonHermesSettingsRepository>();
+        services.AddSingleton<IHermesSyncService, HermesSyncService>();
+
         // View models
         services.AddSingleton<TodoPageViewModel>();
+        services.AddSingleton<SettingsPageViewModel>();
         services.AddSingleton<MainViewModel>();
 
         return services.BuildServiceProvider();
