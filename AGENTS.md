@@ -40,7 +40,7 @@ Avalonia 12.1 cross-platform app (net10.0) using SukiUI theming, MVVM + DI, NLog
 - `MashiruDaily.Core/Abstracts/` — 接口；`Services/TodoService`（单一数据源，变更时抛 `Changed`，单飞冲刷循环落盘值快照）+ `JsonTodoRepository`（原子写：tmp 文件 + move）。
 - `MashiruDaily.Core/ViewModels/Todo/` — `TodoPageViewModel`（拆待完成/已完成集合）、`TodoItemViewModel`（编辑态）。TUI 直接消费这些 VM。
 - **Hermes 同步子系统（全在 Core，三端共用）**：
-  - `HermesSyncService`（`partial : ObservableObject` + `[ObservableProperty]`，非 Avalonia）— 启动先推后拉：推 `HasSynced=false` 条目（统一 `todo_updated` upsert）→ `GET /api/todo/meta` 比对 `LastSyncedDate`（相同则结束）→ 本地仍有未同步则置 `Skipped` → 否则 `GET /api/todo` 整表覆盖并更新 `LastSyncedDate`。事件**串行** POST（限流安全），429 退避 2s，`MaxRetryAttempts+1` 次后置 `Error`。
+  - `HermesSyncService`（`partial : ObservableObject` + `[ObservableProperty]`，非 Avalonia）— 启动先拉 meta 比对 `updatedAt`：`LastSyncedAt` 为空或服务器 `updatedAt` 严格更晚 → 跳过推送、`GET /api/todo` 整表覆盖并持久化 `LastSyncedAt`；否则推送 `HasSynced=false` 条目（统一 `todo_updated` upsert）事件**串行** POST（限流安全），429 退避 2s，`MaxRetryAttempts+1` 次后置 `Error`。
   - `HermesWebhookSigner` — HMAC-SHA256 小写 hex，对 `"{timestamp}.{rawBody}"` 原始字节计算；请求头 `X-Webhook-Timestamp`/`X-Webhook-Signature-V2`/`X-Request-ID`。
   - `JsonHermesSettingsRepository` — `settings.json` 原子写；缺省按 `HermesSettings.CreateDefault()`（`SyncEnabled=false`，不联网）。
   - **防回环（改同步代码必知）**：拉取覆盖时 `_suppressChanged=true`；`TodoService.MarkSyncedAsync` 不触发 `Changed`。破坏任一条 → webhook 回声/死循环。
