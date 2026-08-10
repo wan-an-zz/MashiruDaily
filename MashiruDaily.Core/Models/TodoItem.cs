@@ -13,6 +13,12 @@ public sealed class TodoItem
 
     public bool IsCompleted { get; set; }
 
+    /// <summary>
+    /// True once this item has been pushed to the external sync store.
+    /// Defaults to false; existing JSON files deserialize to false (backward compatible).
+    /// </summary>
+    public bool HasSynced { get; set; }
+
     public DateTime CreatedAt { get; init; } = DateTime.Now;
 
     public DateTime? CompletedAt { get; set; }

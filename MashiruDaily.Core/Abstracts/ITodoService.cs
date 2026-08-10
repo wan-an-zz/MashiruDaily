@@ -30,4 +30,16 @@ public interface ITodoService
     Task ToggleAsync(TodoItem item);
 
     Task UpdateTitleAsync(TodoItem item, string title);
+
+    /// <summary>
+    /// Replaces the entire in-memory collection with <paramref name="items"/>,
+    /// keeping the same item references. Raises <see cref="Changed"/> and persists.
+    /// </summary>
+    Task ReplaceAllAsync(IReadOnlyList<TodoItem> items);
+
+    /// <summary>
+    /// Marks the live items whose ids are in <paramref name="ids"/> as synced and
+    /// persists without raising <see cref="Changed"/> so sync watchers do not echo back.
+    /// </summary>
+    Task MarkSyncedAsync(IReadOnlyCollection<Guid> ids);
 }

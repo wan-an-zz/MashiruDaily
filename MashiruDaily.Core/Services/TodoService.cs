@@ -113,6 +113,41 @@ public sealed class TodoService : ITodoService
         return Task.CompletedTask;
     }
 
+    public Task ReplaceAllAsync(IReadOnlyList<TodoItem> items)
+    {
+        lock (_gate)
+        {
+            _items.Clear();
+            _items.AddRange(items);
+        }
+
+        _logger.LogInformation("Replaced all todos with {Count} items.", items.Count);
+        OnChanged();
+        RequestFlush();
+        return Task.CompletedTask;
+    }
+
+    public Task MarkSyncedAsync(IReadOnlyCollection<Guid> ids)
+    {
+        int matched = 0;
+        lock (_gate)
+        {
+            var idSet = new HashSet<Guid>(ids);
+            foreach (var item in _items)
+            {
+                if (idSet.Contains(item.Id))
+                {
+                    item.HasSynced = true;
+                    matched++;
+                }
+            }
+        }
+
+        _logger.LogInformation("Marked {Matched} of {Requested} todos as synced.", matched, ids.Count);
+        RequestFlush();
+        return Task.CompletedTask;
+    }
+
     private void OnChanged() => Changed?.Invoke(this, EventArgs.Empty);
 
     private void RequestFlush()
@@ -137,6 +172,7 @@ public sealed class TodoService : ITodoService
                 Id = item.Id,
                 Title = item.Title,
                 IsCompleted = item.IsCompleted,
+                HasSynced = item.HasSynced,
                 CreatedAt = item.CreatedAt,
                 CompletedAt = item.CompletedAt,
             });
