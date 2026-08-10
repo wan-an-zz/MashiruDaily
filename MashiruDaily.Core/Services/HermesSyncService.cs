@@ -146,7 +146,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
                 if (!_settings.SyncEnabled)
                     return;
 
-                _logger.LogInformation("手动同步已请求：先比对服务器创建时间，再决定推拉。");
+                _logger.LogInformation("手动同步已请求");
                 var meta = await FetchMetaAsync();
                 if (meta is null)
                     return;
