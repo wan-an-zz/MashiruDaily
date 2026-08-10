@@ -42,9 +42,9 @@ public sealed class HermesSettings
     public double TimeoutSeconds { get; set; } = 10;
 
     /// <summary>
-    /// 客户端记录的服务器待办日期，为不透明的 "yyyy-MM-dd" 字符串。
+    /// 上次成功拉取时服务器 todo.json 的更新时间，ISO 8601 UTC 规范化字符串（DateTimeOffset.UtcDateTime.ToString("O")）；为空表示尚未同步（首次启动或旧版本升级），下次同步视为需要拉取。
     /// </summary>
-    public string? LastSyncedDate { get; set; }
+    public string? LastSyncedAt { get; set; }
 
     /// <summary>
     /// 尚无设置文件时使用的工厂默认值。
@@ -58,6 +58,6 @@ public sealed class HermesSettings
         SyncEnabled = false,
         MaxRetryAttempts = 3,
         TimeoutSeconds = 10,
-        LastSyncedDate = null,
+        LastSyncedAt = null,
     };
 }

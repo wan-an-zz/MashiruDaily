@@ -19,7 +19,7 @@ namespace MashiruDaily.Core.Services;
 /// <summary>
 /// Hermes AI 同步后台任务。监听 <see cref="ITodoService"/> 的变更，
 /// 将变更作为已签名的 Webhook 事件推送到 Hermes，并实现通信协议中定义的
-/// 启动「先推后拉」流程。维护最近观测数据的值快照，
+/// 启动「先比对服务器更新时间，再决定推拉」流程。维护最近观测数据的值快照，
 /// 以便在不动 <c>TodoService</c> 自身锁的情况下做差异对比。
 /// </summary>
 public sealed partial class HermesSyncService : ObservableObject, IHermesSyncService
@@ -39,9 +39,16 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
 
     private sealed record PendingEvent(TodoItem Snapshot, string Type);
 
+    /// <summary>
+    /// 拉取决策：是否需要拉取，以及服务器 todo.json 的更新时间（UTC）。
+    /// </summary>
+    private sealed record MetaResult(bool NeedPull, DateTimeOffset ServerUpdatedAt);
+
     private sealed class MetaDate
     {
         public string? Date { get; set; }
+
+        public string? UpdatedAt { get; set; }
     }
 
     private static readonly JsonSerializerOptions CamelCaseJson = new()
@@ -139,10 +146,17 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
                 if (!_settings.SyncEnabled)
                     return;
 
-                _logger.LogInformation("手动同步已请求：先推送待处理项，再拉取。");
-                EnqueuePendingAsUpdated();
-                await DispatchCoreAsync();
-                await PullFromServerAsync();
+                _logger.LogInformation("手动同步已请求：先比对服务器更新时间，再决定推拉。");
+                var meta = await FetchMetaAsync();
+                if (meta is null)
+                    return;
+                if (meta.NeedPull)
+                {
+                    await PullTodoListAsync(meta.ServerUpdatedAt);
+                    return;
+                }
+
+                await PushPendingOnlyAsync();
             }
             finally
             {
@@ -208,10 +222,17 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
                 return;
             }
 
-            _logger.LogInformation("Hermes 同步已启用：先推送待处理项，再拉取。");
-            EnqueuePendingAsUpdated();
-            await DispatchCoreAsync();
-            await PullFromServerAsync();
+            _logger.LogInformation("Hermes 同步已启用：先比对服务器更新时间，再决定推拉。");
+            var meta = await FetchMetaAsync();
+            if (meta is null)
+                return;
+            if (meta.NeedPull)
+            {
+                await PullTodoListAsync(meta.ServerUpdatedAt);
+                return;
+            }
+
+            await PushPendingOnlyAsync();
         }
         catch (Exception ex)
         {
@@ -459,16 +480,18 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
     }
 
     /// <summary>
-    /// 启动拉取流程：GET meta 对比日期，本地有待同步修改则跳过，
-    /// 否则 GET 整个列表并整体替换本地集合。
+    /// 请求服务器元数据，并依据 <c>updatedAt</c> 与本地 <see cref="HermesSettings.LastSyncedAt"/>
+    /// 决定是否需要拉取。调用方必须持有 <see cref="_gate"/>。
     /// </summary>
-    private async Task PullFromServerAsync()
+    /// <returns>
+    /// 拉取决策与服务器 todo.json 的更新时间；失败时置 <see cref="SyncStatus.Error"/> 并返回 null。
+    /// </returns>
+    private async Task<MetaResult?> FetchMetaAsync()
     {
         UpdateStatus(SyncStatus.Pulling, null);
 
         var baseUrl = _settings.ServerBaseUrl.TrimEnd('/');
         var metaUrl = $"{baseUrl}/api/todo/meta";
-        var listUrl = $"{baseUrl}/api/todo";
 
         MetaDate? meta;
         try
@@ -477,7 +500,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
             if (metaResponse.StatusCode != HttpStatusCode.OK)
             {
                 UpdateStatus(SyncStatus.Error, $"元数据请求返回 HTTP {(int)metaResponse.StatusCode}。");
-                return;
+                return null;
             }
 
             meta = await metaResponse.Content.ReadFromJsonAsync<MetaDate>(CamelCaseJson);
@@ -486,28 +509,46 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
         {
             _logger.LogError(ex, "Hermes 元数据请求失败。");
             UpdateStatus(SyncStatus.Error, $"元数据请求失败：{ex.Message}");
-            return;
+            return null;
         }
 
-        if (meta?.Date is null)
+        if (meta?.UpdatedAt is not { Length: > 0 } updatedAt
+            || !DateTimeOffset.TryParse(updatedAt, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal, out var parsed))
         {
-            UpdateStatus(SyncStatus.Error, "元数据响应未包含日期。");
-            return;
+            UpdateStatus(SyncStatus.Error, "元数据响应未包含有效的 updatedAt。");
+            return null;
         }
 
-        if (string.Equals(meta.Date, _settings.LastSyncedDate, StringComparison.Ordinal))
+        var serverUtc = parsed.ToUniversalTime();
+
+        bool needPull;
+        if (string.IsNullOrWhiteSpace(_settings.LastSyncedAt))
         {
-            _logger.LogInformation("服务器日期 {Date} 与上次同步日期一致；跳过拉取。", meta.Date);
-            UpdateStatus(SyncStatus.Success, null);
-            return;
+            needPull = true;
+        }
+        else if (!DateTimeOffset.TryParse(_settings.LastSyncedAt, CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal, out var lastSyncedAt))
+        {
+            needPull = true;
+        }
+        else
+        {
+            needPull = serverUtc > lastSyncedAt;
         }
 
-        if (_todoService.Items.Any(x => !x.HasSynced))
-        {
-            _logger.LogWarning("存在本地待同步修改；跳过拉取。");
-            UpdateStatus(SyncStatus.Skipped, "有本地未同步修改，跳过拉取");
-            return;
-        }
+        return new MetaResult(needPull, serverUtc);
+    }
+
+    /// <summary>
+    /// 拉取服务器整列表并整体替换本地集合，最后持久化
+    /// <see cref="HermesSettings.LastSyncedAt"/> 为服务器更新时间。
+    /// 调用方必须持有 <see cref="_gate"/>。
+    /// </summary>
+    private async Task PullTodoListAsync(DateTimeOffset serverUpdatedAt)
+    {
+        var baseUrl = _settings.ServerBaseUrl.TrimEnd('/');
+        var listUrl = $"{baseUrl}/api/todo";
 
         List<TodoItem>? pulled;
         try
@@ -549,13 +590,26 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
                 _snapshot[item.Id] = Copy(item);
         }
 
-        _settings.LastSyncedDate = meta.Date;
+        _settings.LastSyncedAt = serverUpdatedAt.UtcDateTime.ToString("O", CultureInfo.InvariantCulture);
         await _settingsRepo.SaveAsync(_settings);
 
-        _logger.LogInformation("已从服务器拉取 {Count} 条待办；上次同步日期为 {Date}。",
-            pulled.Count, meta.Date);
+        _logger.LogInformation("已从服务器拉取 {Count} 条待办；上次同步时间更新为 {UpdatedAt}。",
+            pulled.Count, _settings.LastSyncedAt);
         UpdateStatus(SyncStatus.Success, null);
         RefreshPendingSyncCount();
+    }
+
+    /// <summary>
+    /// 服务器 todo.json 更新时间不晚于上次同步时：仅推送本地待处理项。
+    /// 调用方必须持有 <see cref="_gate"/>。
+    /// </summary>
+    private async Task PushPendingOnlyAsync()
+    {
+        _logger.LogInformation("服务器 todo.json 更新时间不晚于上次同步；推送本地待处理项。");
+        EnqueuePendingAsUpdated();
+        await DispatchCoreAsync();
+        if (PendingSyncCount == 0)
+            UpdateStatus(SyncStatus.Success, null);
     }
 
     private void RefreshPendingSyncCount()

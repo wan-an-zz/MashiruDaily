@@ -41,7 +41,7 @@ public class JsonHermesSettingsRepositoryTests : IDisposable
             SyncEnabled = true,
             MaxRetryAttempts = 7,
             TimeoutSeconds = 25.5,
-            LastSyncedDate = "2026-08-09",
+            LastSyncedAt = "2026-08-09",
         };
 
         await _repository.SaveAsync(settings);
@@ -54,7 +54,7 @@ public class JsonHermesSettingsRepositoryTests : IDisposable
         Assert.Equal(settings.SyncEnabled, loaded.SyncEnabled);
         Assert.Equal(settings.MaxRetryAttempts, loaded.MaxRetryAttempts);
         Assert.Equal(settings.TimeoutSeconds, loaded.TimeoutSeconds);
-        Assert.Equal(settings.LastSyncedDate, loaded.LastSyncedDate);
+        Assert.Equal(settings.LastSyncedAt, loaded.LastSyncedAt);
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public class JsonHermesSettingsRepositoryTests : IDisposable
         Assert.False(loaded.SyncEnabled);
         Assert.Equal(3, loaded.MaxRetryAttempts);
         Assert.Equal(10, loaded.TimeoutSeconds);
-        Assert.Null(loaded.LastSyncedDate);
+        Assert.Null(loaded.LastSyncedAt);
     }
 
     [Fact]
