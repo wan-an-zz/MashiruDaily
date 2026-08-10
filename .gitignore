@@ -9,3 +9,4 @@ MashiruDaily.sln.DotSettings.user
 docs/design/*
 !docs/design/通信协议.md
 !docs/design/通信协议示例.json
+.omo
