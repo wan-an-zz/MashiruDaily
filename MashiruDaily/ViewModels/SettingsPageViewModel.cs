@@ -14,8 +14,46 @@ namespace MashiruDaily.ViewModels;
 public partial class SettingsPageViewModel : ViewModelBase
 {
     private readonly IHermesSettingsRepository _settingsRepository;
+
     private readonly IHermesSyncService _syncService;
+
     private readonly HttpClient _httpClient;
+
+    [ObservableProperty]
+    private string _serverBaseUrl = string.Empty;
+
+    [ObservableProperty]
+    private string _hermesBaseUrl = string.Empty;
+
+    [ObservableProperty]
+    private string _webhookRouteName = string.Empty;
+
+    [ObservableProperty]
+    private string _webhookSecret = string.Empty;
+
+    [ObservableProperty]
+    private int _maxRetryAttempts;
+
+    [ObservableProperty]
+    private double _timeoutSeconds;
+
+    [ObservableProperty]
+    private bool _syncEnabled;
+
+    [ObservableProperty]
+    private string? _errorText;
+
+    [ObservableProperty]
+    private string? _infoText;
+
+    [ObservableProperty]
+    private string _syncStatusText = "空闲";
+
+    [ObservableProperty]
+    private bool _hasSyncError;
+
+    [ObservableProperty]
+    private string? _testResultText;
 
     public SettingsPageViewModel(
         IHermesSettingsRepository settingsRepository,
@@ -29,19 +67,6 @@ public partial class SettingsPageViewModel : ViewModelBase
         _syncService.StatusChanged += OnSyncStatusChanged;
         UpdateSyncStatus();
     }
-
-    [ObservableProperty] private string _serverBaseUrl = string.Empty;
-    [ObservableProperty] private string _hermesBaseUrl = string.Empty;
-    [ObservableProperty] private string _webhookRouteName = string.Empty;
-    [ObservableProperty] private string _webhookSecret = string.Empty;
-    [ObservableProperty] private int _maxRetryAttempts;
-    [ObservableProperty] private double _timeoutSeconds;
-    [ObservableProperty] private bool _syncEnabled;
-    [ObservableProperty] private string? _errorText;
-    [ObservableProperty] private string? _infoText;
-    [ObservableProperty] private string _syncStatusText = "空闲";
-    [ObservableProperty] private bool _hasSyncError;
-    [ObservableProperty] private string? _testResultText;
 
     private async Task LoadSettingsAsync()
     {

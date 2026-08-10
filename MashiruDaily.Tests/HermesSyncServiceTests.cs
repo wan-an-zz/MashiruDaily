@@ -17,12 +17,14 @@ using Xunit;
 namespace MashiruDaily.Tests;
 
 /// <summary>
-/// Hand-rolled HttpMessageHandler that records every request and serves scripted responses.
+/// 手写的 HttpMessageHandler：记录每个请求并按脚本返回响应。
 /// </summary>
 public sealed class FakeHttpMessageHandler : HttpMessageHandler
 {
     private readonly Func<HttpRequestMessage, HttpResponseMessage> _responder;
+
     private readonly object _lock = new();
+
     private readonly List<RecordedRequest> _requests = new();
 
     public FakeHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responder)
@@ -74,7 +76,7 @@ public sealed record RecordedRequest(
     string? Body);
 
 /// <summary>
-/// HttpMessageHandler that always fails a request with the given exception.
+/// 始终以给定异常使请求失败的 HttpMessageHandler。
 /// </summary>
 public sealed class ThrowingHttpMessageHandler : HttpMessageHandler
 {
@@ -330,7 +332,7 @@ public class HermesSyncServiceTests : IDisposable
     {
         var local = new TodoItem { Title = "local", HasSynced = true };
         var settings = SyncSettings();
-        settings.LastSyncedDate = "2026-08-09"; // older than the server date
+        settings.LastSyncedDate = "2026-08-09"; // 早于服务器日期
 
         var handler = new FakeHttpMessageHandler(request =>
         {
@@ -364,7 +366,7 @@ public class HermesSyncServiceTests : IDisposable
     public async Task InitializeAsync_SameMetaDate_SkipsPullAndKeepsItems()
     {
         var local = new TodoItem { Title = "keep me", HasSynced = true };
-        var settings = SyncSettings(); // LastSyncedDate matches the server meta date
+        var settings = SyncSettings(); // LastSyncedDate 与服务器 meta 日期一致
 
         var handler = new FakeHttpMessageHandler(request =>
         {
@@ -393,7 +395,7 @@ public class HermesSyncServiceTests : IDisposable
     {
         var local = new TodoItem { Title = "unsynced", HasSynced = false };
         var settings = SyncSettings();
-        settings.LastSyncedDate = "2026-08-09"; // older than the server date
+        settings.LastSyncedDate = "2026-08-09"; // 早于服务器日期
 
         var handler = new FakeHttpMessageHandler(request =>
         {

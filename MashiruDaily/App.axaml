@@ -4,12 +4,12 @@
              xmlns:suki="https://github.com/kikipoulet/SukiUI"
              x:Class="MashiruDaily.App"
              RequestedThemeVariant="Default">
-    <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+    <!-- "Default" 主题变体跟随系统主题；"Dark" 或 "Light" 是其他可选值。 -->
 
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <!-- Custom controls that extend SukiUI -->
+                <!-- 扩展 SukiUI 的自定义控件 -->
                 <ResourceInclude Source="/Controls/BottomNavigationBar.axaml" />
                 <ResourceInclude Source="/Controls/BottomNavigationItem.axaml" />
             </ResourceDictionary.MergedDictionaries>
@@ -22,7 +22,7 @@
 
     <Application.Styles>
         <FluentTheme />
-        <!-- SukiUI drives the look & feel; see https://kikipoulet.github.io/SukiUI/ -->
+        <!-- SukiUI 负责外观与风格；参见 https://kikipoulet.github.io/SukiUI/ -->
         <suki:SukiTheme Locale="zh-CN" ThemeColor="Blue" />
     </Application.Styles>
 </Application>

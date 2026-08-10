@@ -5,20 +5,19 @@ using System.Text;
 namespace MashiruDaily.Core.Services;
 
 /// <summary>
-/// Signs Hermes webhook requests (protocol header <c>X-Webhook-Signature-V2</c>):
-/// lowercase hex HMAC-SHA256 over the UTF-8 bytes of <c>"{timestamp}.{rawBody}"</c>.
+/// 为 Hermes Webhook 请求签名（协议头 <c>X-Webhook-Signature-V2</c>）：
+/// 对 <c>"{timestamp}.{rawBody}"</c> 的 UTF-8 字节计算小写十六进制 HMAC-SHA256。
 /// </summary>
 public static class HermesWebhookSigner
 {
     /// <summary>
-    /// Computes the lowercase hex HMAC-SHA256 signature for the given
-    /// <paramref name="secret"/>, <paramref name="timestamp"/> and
-    /// <paramref name="rawBody"/>.
+    /// 根据 <paramref name="secret"/>、<paramref name="timestamp"/> 与
+    /// <paramref name="rawBody"/> 计算小写十六进制 HMAC-SHA256 签名。
     /// </summary>
-    /// <param name="secret">Shared HMAC secret from the Hermes settings.</param>
-    /// <param name="timestamp">Unix-seconds string sent as <c>X-Webhook-Timestamp</c>.</param>
-    /// <param name="rawBody">The exact request body bytes as UTF-8 text.</param>
-    /// <returns>A 64-character lowercase hexadecimal string.</returns>
+    /// <param name="secret">来自 Hermes 设置的共享 HMAC 密钥。</param>
+    /// <param name="timestamp">以 <c>X-Webhook-Timestamp</c> 发送的 Unix 秒数字符串。</param>
+    /// <param name="rawBody">请求体的 UTF-8 文本（与发送字节完全一致）。</param>
+    /// <returns>64 位小写十六进制字符串。</returns>
     public static string ComputeSignature(string secret, string timestamp, string rawBody)
     {
         ArgumentNullException.ThrowIfNull(secret);

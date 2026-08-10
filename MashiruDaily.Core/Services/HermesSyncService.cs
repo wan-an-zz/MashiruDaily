@@ -17,19 +17,23 @@ using Microsoft.Extensions.Logging;
 namespace MashiruDaily.Core.Services;
 
 /// <summary>
-/// Hermes AI-sync worker. Watches <see cref="ITodoService"/> for changes and pushes
-/// them as signed webhook events to Hermes, and implements the startup push-then-pull
-/// flow from the communication protocol. Keeps a value snapshot of the last observed
-/// items so it can diff changes without touching <c>TodoService</c>'s own lock.
+/// Hermes AI 同步后台任务。监听 <see cref="ITodoService"/> 的变更，
+/// 将变更作为已签名的 Webhook 事件推送到 Hermes，并实现通信协议中定义的
+/// 启动「先推后拉」流程。维护最近观测数据的值快照，
+/// 以便在不动 <c>TodoService</c> 自身锁的情况下做差异对比。
 /// </summary>
 public sealed partial class HermesSyncService : ObservableObject, IHermesSyncService
 {
     private static class EventTypes
     {
         public const string Added = "todo_added";
+
         public const string Updated = "todo_updated";
+
         public const string Completed = "todo_completed";
+
         public const string Reopened = "todo_reopened";
+
         public const string Deleted = "todo_deleted";
     }
 
@@ -46,39 +50,51 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
     };
 
     private readonly ITodoService _todoService;
+
     private readonly IHermesSettingsRepository _settingsRepo;
+
     private readonly ILogger<HermesSyncService> _logger;
+
     private readonly HttpClient _httpClient;
+
     private readonly Guid _clientId = Guid.NewGuid();
+
     private readonly SemaphoreSlim _gate = new(1, 1);
+
     private readonly object _stateLock = new();
+
     private readonly Dictionary<Guid, TodoItem> _snapshot = new();
+
     private readonly Queue<PendingEvent> _pendingQueue = new();
+
     private volatile bool _suppressChanged;
+
     private volatile bool _initialized;
+
     private int _dispatchRunning;
+
     private HermesSettings _settings = HermesSettings.CreateDefault();
 
     [ObservableProperty]
-    private SyncStatus status;
+    private SyncStatus _status;
 
     [ObservableProperty]
-    private string? lastError;
+    private string? _lastError;
 
     [ObservableProperty]
-    private int pendingSyncCount;
+    private int _pendingSyncCount;
 
     /// <inheritdoc />
     public event EventHandler? StatusChanged;
 
     /// <summary>
-    /// Creates the sync service. Subscribes to <see cref="ITodoService.Changed"/> so
-    /// future mutations are diffed and pushed automatically.
+    /// 创建同步服务。订阅 <see cref="ITodoService.Changed"/>，
+    /// 以便自动对比并推送后续变更。
     /// </summary>
-    /// <param name="todoService">Single source of truth for todos. Must be initialized first.</param>
-    /// <param name="settingsRepo">Persisted Hermes settings store.</param>
-    /// <param name="logger">Structured logger.</param>
-    /// <param name="httpClient">Optional client (used for tests); a default one is created when omitted.</param>
+    /// <param name="todoService">待办数据的唯一来源，必须先初始化。</param>
+    /// <param name="settingsRepo">持久化的 Hermes 设置存储。</param>
+    /// <param name="logger">结构化日志器。</param>
+    /// <param name="httpClient">可选客户端（测试用）；缺省时创建默认实例。</param>
     public HermesSyncService(
         ITodoService todoService,
         IHermesSettingsRepository settingsRepo,
@@ -123,7 +139,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
                 if (!_settings.SyncEnabled)
                     return;
 
-                _logger.LogInformation("Manual sync requested; pushing pending items then pulling.");
+                _logger.LogInformation("手动同步已请求：先推送待处理项，再拉取。");
                 EnqueuePendingAsUpdated();
                 await DispatchCoreAsync();
                 await PullFromServerAsync();
@@ -135,7 +151,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Hermes SyncNowAsync failed.");
+            _logger.LogError(ex, "Hermes 手动同步失败。");
             UpdateStatus(SyncStatus.Error, ex.Message);
         }
     }
@@ -151,7 +167,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
                 if (!_initialized || !_settings.SyncEnabled)
                     return;
 
-                _logger.LogInformation("Flushing pending Hermes events.");
+                _logger.LogInformation("正在冲刷待处理的 Hermes 事件。");
                 EnqueuePendingAsUpdated();
                 await DispatchCoreAsync();
             }
@@ -162,7 +178,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Hermes FlushAsync failed.");
+            _logger.LogError(ex, "Hermes 冲刷失败。");
         }
     }
 
@@ -187,26 +203,26 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
 
             if (!_settings.SyncEnabled)
             {
-                _logger.LogInformation("Hermes sync is disabled; skipping initialization network calls.");
+                _logger.LogInformation("Hermes 同步已禁用；跳过初始化网络调用。");
                 UpdateStatus(SyncStatus.Idle, null);
                 return;
             }
 
-            _logger.LogInformation("Hermes sync enabled; pushing pending items then pulling.");
+            _logger.LogInformation("Hermes 同步已启用：先推送待处理项，再拉取。");
             EnqueuePendingAsUpdated();
             await DispatchCoreAsync();
             await PullFromServerAsync();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Hermes sync initialization failed.");
+            _logger.LogError(ex, "Hermes 同步初始化失败。");
             UpdateStatus(SyncStatus.Error, ex.Message);
         }
     }
 
     private void OnServiceChanged(object? sender, EventArgs e)
     {
-        // Diff + enqueue only (fast, no I/O); the fire-and-forget dispatch drains the queue.
+        // 只做差异对比并入队（快速、无 I/O）；由后台分发循环消费队列。
         if (_suppressChanged || !_initialized || !_settings.SyncEnabled)
             return;
 
@@ -218,9 +234,9 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
     }
 
     /// <summary>
-    /// Compares the live items against the snapshot and enqueues one event per change.
+    /// 将当前条目与快照对比，每个变更入队一个事件。
     /// </summary>
-    /// <returns>The number of events enqueued.</returns>
+    /// <returns>入队的事件数量。</returns>
     private int DiffAndEnqueue()
     {
         var live = _todoService.Items;
@@ -270,8 +286,8 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
         => _pendingQueue.Enqueue(new PendingEvent(item, eventType));
 
     /// <summary>
-    /// Enqueues every live item with <c>HasSynced == false</c> as a
-    /// <c>todo_updated</c> upsert (used by startup, manual sync and shutdown flush).
+    /// 将每个 <c>HasSynced == false</c> 的现存条目作为 <c>todo_updated</c>
+    /// upsert 入队（用于启动、手动同步与关闭冲刷）。
     /// </summary>
     private void EnqueuePendingAsUpdated()
     {
@@ -288,8 +304,8 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
     }
 
     /// <summary>
-    /// Fire-and-forget entry point: guarantees a single drain loop is running and
-    /// re-triggers itself if events arrive between the drain and the guard reset.
+    /// 即发即忘入口：保证只有一个排空循环在运行，
+    /// 若在排空与守卫复位之间又有事件到达则自行重新触发。
     /// </summary>
     private async Task DispatchPendingAsync()
     {
@@ -310,7 +326,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Hermes pending dispatch failed.");
+            _logger.LogError(ex, "Hermes 待处理事件分发失败。");
         }
         finally
         {
@@ -322,8 +338,8 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
     }
 
     /// <summary>
-    /// Drains the pending queue, sending one event at a time (sequential, rate-limit safe).
-    /// Caller must hold <see cref="_gate"/>.
+    /// 排空待处理队列，逐个发送事件（串行，限流安全）。
+    /// 调用方必须持有 <see cref="_gate"/>。
     /// </summary>
     private async Task DispatchCoreAsync()
     {
@@ -346,7 +362,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Unexpected error sending {EventType} for todo {Id}.",
+                    _logger.LogError(ex, "发送 {EventType} 事件给待办 {Id} 时出现意外错误。",
                         ev.Type, ev.Snapshot.Id);
                 }
             }
@@ -362,9 +378,9 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
     }
 
     /// <summary>
-    /// Sends one signed webhook event with retries up to
-    /// <see cref="HermesSettings.MaxRetryAttempts"/> + 1 attempts.
-    /// On success the live item is marked synced; on exhaustion it stays pending.
+    /// 发送一个已签名的 Webhook 事件，最多重试
+    /// <see cref="HermesSettings.MaxRetryAttempts"/> + 1 次。
+    /// 成功后将现存条目标记为已同步；全部失败则保持待处理。
     /// </summary>
     private async Task SendAsync(TodoItem item, string eventType)
     {
@@ -405,8 +421,8 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
                 if (response.IsSuccessStatusCode)
                 {
                     _logger.LogInformation(
-                        "Webhook {EventType} for todo {Id} accepted (HTTP {StatusCode}).",
-                        eventType, item.Id, (int)response.StatusCode);
+                        "待办 {Id} 的 Webhook {EventType} 已被接受（HTTP {StatusCode}）。",
+                        item.Id, eventType, (int)response.StatusCode);
                     await _todoService.MarkSyncedAsync(new[] { item.Id });
                     RefreshPendingSyncCount();
                     UpdateStatus(SyncStatus.Success, null);
@@ -416,7 +432,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
                 if (response.StatusCode == HttpStatusCode.TooManyRequests)
                 {
                     _logger.LogWarning(
-                        "Webhook rate-limited (429) for todo {Id}, backing off (attempt {Attempt}/{Total}).",
+                        "待办 {Id} 的 Webhook 被限流（429），退避等待（第 {Attempt}/{Total} 次尝试）。",
                         item.Id, attempt, totalAttempts);
                     if (attempt < totalAttempts)
                         await Task.Delay(TimeSpan.FromSeconds(2));
@@ -424,27 +440,27 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
                 }
 
                 _logger.LogWarning(
-                    "Webhook {EventType} for todo {Id} failed with HTTP {StatusCode} (attempt {Attempt}/{Total}).",
-                    eventType, item.Id, (int)response.StatusCode, attempt, totalAttempts);
+                    "待办 {Id} 的 Webhook {EventType} 失败，HTTP {StatusCode}（第 {Attempt}/{Total} 次尝试）。",
+                    item.Id, eventType, (int)response.StatusCode, attempt, totalAttempts);
             }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
             {
                 _logger.LogWarning(
-                    ex, "Webhook {EventType} for todo {Id} network error (attempt {Attempt}/{Total}).",
-                    eventType, item.Id, attempt, totalAttempts);
+                    ex, "待办 {Id} 的 Webhook {EventType} 网络错误（第 {Attempt}/{Total} 次尝试）。",
+                    item.Id, eventType, attempt, totalAttempts);
             }
         }
 
         _logger.LogError(
-            "Webhook {EventType} for todo {Id} exhausted all {TotalAttempts} attempts; item stays pending.",
-            eventType, item.Id, totalAttempts);
-        UpdateStatus(SyncStatus.Error, $"Webhook {eventType} for {item.Id} failed after {totalAttempts} attempts.");
+            "待办 {Id} 的 Webhook {EventType} 已用尽全部 {TotalAttempts} 次尝试；条目保持待处理。",
+            item.Id, eventType, totalAttempts);
+        UpdateStatus(SyncStatus.Error, $"待办 {item.Id} 的 Webhook {eventType} 在 {totalAttempts} 次尝试后失败。");
         RefreshPendingSyncCount();
     }
 
     /// <summary>
-    /// Startup pull flow: GET meta, compare date, skip on local pending, then
-    /// GET the whole list and replace the local collection.
+    /// 启动拉取流程：GET meta 对比日期，本地有待同步修改则跳过，
+    /// 否则 GET 整个列表并整体替换本地集合。
     /// </summary>
     private async Task PullFromServerAsync()
     {
@@ -460,7 +476,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
             using var metaResponse = await _httpClient.GetAsync(metaUrl);
             if (metaResponse.StatusCode != HttpStatusCode.OK)
             {
-                UpdateStatus(SyncStatus.Error, $"Meta request returned HTTP {(int)metaResponse.StatusCode}.");
+                UpdateStatus(SyncStatus.Error, $"元数据请求返回 HTTP {(int)metaResponse.StatusCode}。");
                 return;
             }
 
@@ -468,27 +484,27 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or NotSupportedException)
         {
-            _logger.LogError(ex, "Hermes meta request failed.");
-            UpdateStatus(SyncStatus.Error, $"Meta request failed: {ex.Message}");
+            _logger.LogError(ex, "Hermes 元数据请求失败。");
+            UpdateStatus(SyncStatus.Error, $"元数据请求失败：{ex.Message}");
             return;
         }
 
         if (meta?.Date is null)
         {
-            UpdateStatus(SyncStatus.Error, "Meta response did not include a date.");
+            UpdateStatus(SyncStatus.Error, "元数据响应未包含日期。");
             return;
         }
 
         if (string.Equals(meta.Date, _settings.LastSyncedDate, StringComparison.Ordinal))
         {
-            _logger.LogInformation("Server date {Date} matches last synced date; skipping pull.", meta.Date);
+            _logger.LogInformation("服务器日期 {Date} 与上次同步日期一致；跳过拉取。", meta.Date);
             UpdateStatus(SyncStatus.Success, null);
             return;
         }
 
         if (_todoService.Items.Any(x => !x.HasSynced))
         {
-            _logger.LogWarning("Local pending edits exist; skipping pull.");
+            _logger.LogWarning("存在本地待同步修改；跳过拉取。");
             UpdateStatus(SyncStatus.Skipped, "有本地未同步修改，跳过拉取");
             return;
         }
@@ -499,7 +515,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
             using var listResponse = await _httpClient.GetAsync(listUrl);
             if (listResponse.StatusCode != HttpStatusCode.OK)
             {
-                UpdateStatus(SyncStatus.Error, $"Todo list request returned HTTP {(int)listResponse.StatusCode}.");
+                UpdateStatus(SyncStatus.Error, $"待办列表请求返回 HTTP {(int)listResponse.StatusCode}。");
                 return;
             }
 
@@ -507,8 +523,8 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or NotSupportedException)
         {
-            _logger.LogError(ex, "Hermes todo list request failed.");
-            UpdateStatus(SyncStatus.Error, $"Todo list request failed: {ex.Message}");
+            _logger.LogError(ex, "Hermes 待办列表请求失败。");
+            UpdateStatus(SyncStatus.Error, $"待办列表请求失败：{ex.Message}");
             return;
         }
 
@@ -536,7 +552,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
         _settings.LastSyncedDate = meta.Date;
         await _settingsRepo.SaveAsync(_settings);
 
-        _logger.LogInformation("Pulled {Count} todos from server; last synced date is {Date}.",
+        _logger.LogInformation("已从服务器拉取 {Count} 条待办；上次同步日期为 {Date}。",
             pulled.Count, meta.Date);
         UpdateStatus(SyncStatus.Success, null);
         RefreshPendingSyncCount();

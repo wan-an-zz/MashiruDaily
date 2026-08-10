@@ -4,11 +4,11 @@ namespace MashiruDaily.iOS;
 
 public class Application
 {
-    // This is the main entry point of the application.
+    // 这是应用的主入口。
     static void Main(string[] args)
     {
-        // if you want to use a different Application Delegate class from "AppDelegate"
-        // you can specify it here.
+        // 如果你想使用与 "AppDelegate" 不同的 Application Delegate 类，
+        // 可以在这里指定。
         UIApplication.Main(args, null, typeof(AppDelegate));
     }
 }

@@ -1,54 +1,53 @@
 namespace MashiruDaily.Core.Models;
 
 /// <summary>
-/// Persisted settings for the Hermes AI-sync feature. Plain data model;
-/// <see cref="CreateDefault"/> supplies the factory defaults used when no
-/// settings file exists yet.
+/// Hermes AI 同步功能的持久化设置。纯数据模型；
+/// <see cref="CreateDefault"/> 提供尚无设置文件时使用的默认值。
 /// </summary>
 public sealed class HermesSettings
 {
     /// <summary>
-    /// GET-pull server base, e.g. "http://192.168.1.100:8080".
+    /// 拉取用的服务器基础地址，例如 "http://192.168.1.100:8080"。
     /// </summary>
     public string ServerBaseUrl { get; set; } = string.Empty;
 
     /// <summary>
-    /// Hermes daemon base URL.
+    /// Hermes 守护进程基础地址。
     /// </summary>
     public string HermesBaseUrl { get; set; } = "http://localhost:8644";
 
     /// <summary>
-    /// Route name for the Hermes webhook.
+    /// Hermes Webhook 的路由名。
     /// </summary>
     public string WebhookRouteName { get; set; } = "todo-sync";
 
     /// <summary>
-    /// HMAC secret used to sign Hermes webhook V2 requests.
+    /// 用于签署 Hermes Webhook V2 请求的 HMAC 密钥。
     /// </summary>
     public string WebhookSecret { get; set; } = string.Empty;
 
     /// <summary>
-    /// Whether the Hermes AI-sync feature is enabled.
+    /// 是否启用 Hermes AI 同步功能。
     /// </summary>
     public bool SyncEnabled { get; set; }
 
     /// <summary>
-    /// Maximum retry attempts for failed sync operations.
+    /// 同步操作失败时的最大重试次数。
     /// </summary>
     public int MaxRetryAttempts { get; set; } = 3;
 
     /// <summary>
-    /// Timeout in seconds for sync operations.
+    /// 同步操作的超时秒数。
     /// </summary>
     public double TimeoutSeconds { get; set; } = 10;
 
     /// <summary>
-    /// Client's record of the server todo date it has, as an opaque "yyyy-MM-dd" string.
+    /// 客户端记录的服务器待办日期，为不透明的 "yyyy-MM-dd" 字符串。
     /// </summary>
     public string? LastSyncedDate { get; set; }
 
     /// <summary>
-    /// Factory defaults used when no settings file exists yet.
+    /// 尚无设置文件时使用的工厂默认值。
     /// </summary>
     public static HermesSettings CreateDefault() => new()
     {

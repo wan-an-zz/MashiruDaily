@@ -6,8 +6,8 @@ using Avalonia.Input;
 namespace MashiruDaily.Controls;
 
 /// <summary>
-/// A single tab entry that hosts arbitrary content such as an icon and label, driven by the owning bar's
-/// <see cref="IsSelected"/> state through selected and pressed pseudo-classes.
+/// 单个标签项，可承载图标、文字等任意内容；
+/// 通过选中与按压伪类响应所属导航栏的 <see cref="IsSelected"/> 状态。
 /// </summary>
 public class BottomNavigationItem : ContentControl
 {

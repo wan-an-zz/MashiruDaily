@@ -11,7 +11,9 @@ namespace MashiruDaily.Tests;
 public class JsonTodoRepositoryTests : IDisposable
 {
     private readonly string _dir;
+
     private readonly string _file;
+
     private readonly JsonTodoRepository _repository;
 
     public JsonTodoRepositoryTests()

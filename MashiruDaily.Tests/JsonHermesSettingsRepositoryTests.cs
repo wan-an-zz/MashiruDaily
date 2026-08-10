@@ -11,7 +11,9 @@ namespace MashiruDaily.Tests;
 public class JsonHermesSettingsRepositoryTests : IDisposable
 {
     private readonly string _dir;
+
     private readonly string _file;
+
     private readonly JsonHermesSettingsRepository _repository;
 
     public JsonHermesSettingsRepositoryTests()

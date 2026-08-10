@@ -10,14 +10,16 @@ using Microsoft.Extensions.Logging;
 namespace MashiruDaily.Core.Services;
 
 /// <summary>
-/// Persists todos as a single JSON array under <c>%APPDATA%\MashiruDaily\todos.json</c>.
-/// Writes are atomic (tmp file + move) so a crash never leaves a half-written file.
-/// Missing or corrupt files load as an empty list; IO failures are logged, never thrown.
+/// 将待办以单个 JSON 数组持久化到 <c>%APPDATA%\MashiruDaily\todos.json</c>。
+/// 写入是原子的（tmp 文件 + move），崩溃不会留下半写的文件。
+/// 缺失或损坏的文件按空列表加载；IO 失败只记录日志，绝不抛出。
 /// </summary>
 public sealed class JsonTodoRepository : ITodoRepository
 {
     private readonly ILogger<JsonTodoRepository> _logger;
+
     private readonly string _directory;
+
     private readonly string _filePath;
 
     public JsonTodoRepository(ILogger<JsonTodoRepository> logger, string? dataDirectory = null)
@@ -42,7 +44,7 @@ public sealed class JsonTodoRepository : ITodoRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to load todos from '{File}'; starting empty.", _filePath);
+            _logger.LogError(ex, "从 '{File}' 加载待办失败；以空列表开始。", _filePath);
             return Task.FromResult<IReadOnlyList<TodoItem>>(new List<TodoItem>());
         }
     }
@@ -59,7 +61,7 @@ public sealed class JsonTodoRepository : ITodoRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to save todos to '{File}'.", _filePath);
+            _logger.LogError(ex, "保存待办到 '{File}' 失败。", _filePath);
         }
     }
 }

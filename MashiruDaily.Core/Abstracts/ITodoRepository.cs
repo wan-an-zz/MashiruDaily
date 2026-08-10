@@ -5,8 +5,8 @@ using MashiruDaily.Core.Models;
 namespace MashiruDaily.Core.Abstracts;
 
 /// <summary>
-/// Persistence abstraction for todo items. Swap the implementation for a
-/// database / file based store without touching the rest of the app.
+/// 待办事项的持久化抽象。如需换成数据库或文件存储，只需替换实现，
+/// 无需改动应用其余部分。
 /// </summary>
 public interface ITodoRepository
 {

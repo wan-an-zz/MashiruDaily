@@ -4,8 +4,8 @@ using Avalonia.Media.Fonts;
 namespace MashiruDaily.Assets;
 
 /// <summary>
-/// Registers the bundled Noto Sans SC subset so it can be referenced as
-/// <c>fonts:MashiruDailyCJK#Noto Sans SC</c>.
+/// 注册内置的 Noto Sans SC 子集，使其可通过
+/// <c>fonts:MashiruDailyCJK#Noto Sans SC</c> 引用。
 /// </summary>
 public sealed class NotoSansSCFontCollection : EmbeddedFontCollection
 {

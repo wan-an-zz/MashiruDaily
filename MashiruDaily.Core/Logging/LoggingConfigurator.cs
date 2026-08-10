@@ -7,8 +7,8 @@ using NLog.Targets;
 namespace MashiruDaily.Core.Logging;
 
 /// <summary>
-/// Configures NLog programmatically so it works on every platform
-/// (desktop, Android, ...) without relying on a nlog.config file.
+/// 以编程方式配置 NLog，使它在每个平台（桌面、Android 等）都能工作，
+/// 无需依赖 nlog.config 文件。
 /// </summary>
 public static class LoggingConfigurator
 {
