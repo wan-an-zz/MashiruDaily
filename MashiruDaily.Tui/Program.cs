@@ -17,7 +17,7 @@ await todoService.InitializeAsync();
 
 var sync = services.GetRequiredService<IHermesSyncService>();
 var logger = services.GetRequiredService<ILogger<Program>>();
-sync.StatusChanged += (_, _) => logger.LogInformation("Sync status: {Status}", sync.Status);
+sync.StatusChanged += (_, _) => logger.LogInformation("同步状态：{Status}", sync.Status);
 _ = SyncStartupAsync(sync, logger);
 
 var viewModel = services.GetRequiredService<TodoPageViewModel>();
@@ -32,7 +32,7 @@ finally
 {
     await todoService.FlushAsync();
     try { await sync.FlushAsync(); }
-    catch (Exception ex) { logger.LogError(ex, "Hermes sync flush failed."); }
+    catch (Exception ex) { logger.LogError(ex, "Hermes 同步冲刷失败。"); }
     app.Dispose();
 }
 
@@ -60,5 +60,5 @@ static ServiceProvider ConfigureServices()
 static async Task SyncStartupAsync(IHermesSyncService sync, ILogger logger)
 {
     try { await sync.InitializeAsync(); }
-    catch (Exception ex) { logger.LogError(ex, "Hermes sync initialization failed."); }
+    catch (Exception ex) { logger.LogError(ex, "Hermes 同步初始化失败。"); }
 }

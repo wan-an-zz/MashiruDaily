@@ -4,60 +4,59 @@ using System.Threading.Tasks;
 namespace MashiruDaily.Core.Abstracts;
 
 /// <summary>
-/// Aggregated state of the Hermes AI-sync worker, surfaced to the UI.
+/// Hermes AI 同步后台任务的聚合状态，供 UI 展示。
 /// </summary>
 public enum SyncStatus
 {
-    /// <summary>No sync activity in progress and no result to report yet.</summary>
+    /// <summary>当前没有同步活动，也没有需要上报的结果。</summary>
     Idle,
 
-    /// <summary>Pushing pending changes to Hermes via webhook.</summary>
+    /// <summary>正在通过 Webhook 向 Hermes 推送待处理的变更。</summary>
     Syncing,
 
-    /// <summary>Pulling the todo list from the server.</summary>
+    /// <summary>正在从服务器拉取待办列表。</summary>
     Pulling,
 
-    /// <summary>The last sync operation completed successfully.</summary>
+    /// <summary>最近一次同步操作成功完成。</summary>
     Success,
 
-    /// <summary>The last sync operation failed; see <see cref="IHermesSyncService.LastError"/>.</summary>
+    /// <summary>最近一次同步操作失败；详见 <see cref="IHermesSyncService.LastError"/>。</summary>
     Error,
 
-    /// <summary>The pull was intentionally skipped (e.g. local pending edits exist).</summary>
+    /// <summary>拉取被有意跳过（例如存在本地待同步的修改）。</summary>
     Skipped,
 }
 
 /// <summary>
-/// Orchestrates Hermes AI-sync: watches the todo service for changes and pushes them
-/// as signed webhook events, plus the startup push-then-pull flow defined in the
-/// communication protocol.
+/// 编排 Hermes AI 同步：监听待办服务的变更并作为已签名的 Webhook 事件推送，
+/// 同时实现通信协议中定义的启动「先推后拉」流程。
 /// </summary>
 public interface IHermesSyncService
 {
-    /// <summary>Current sync status; changed via <see cref="StatusChanged"/>.</summary>
+    /// <summary>当前同步状态；变化通过 <see cref="StatusChanged"/> 通知。</summary>
     SyncStatus Status { get; }
 
-    /// <summary>Human-readable description of the last failure, if any.</summary>
+    /// <summary>最近一次失败的可读描述；没有失败则为 null。</summary>
     string? LastError { get; }
 
-    /// <summary>Number of local todos that still need to be pushed to Hermes.</summary>
+    /// <summary>仍需推送到 Hermes 的本地待办数量。</summary>
     int PendingSyncCount { get; }
 
     /// <summary>
-    /// Raised whenever <see cref="Status"/>, <see cref="LastError"/> or
-    /// <see cref="PendingSyncCount"/> change.
+    /// 每当 <see cref="Status"/>、<see cref="LastError"/> 或
+    /// <see cref="PendingSyncCount"/> 变化时触发。
     /// </summary>
     event EventHandler? StatusChanged;
 
     /// <summary>
-    /// Loads settings, pushes pending items and runs the startup pull.
-    /// Safe to call once; later calls are no-ops.
+    /// 加载设置、推送待处理项并执行启动拉取。
+    /// 只应调用一次；之后的调用是空操作。
     /// </summary>
     Task InitializeAsync();
 
-    /// <summary>Manual sync: re-pushes pending items, then runs the pull flow.</summary>
+    /// <summary>手动同步：重新推送待处理项，然后执行拉取流程。</summary>
     Task SyncNowAsync();
 
-    /// <summary>Best-effort push of pending items; never throws. Call at shutdown.</summary>
+    /// <summary>尽力推送待处理项，绝不抛异常。关闭时调用。</summary>
     Task FlushAsync();
 }

@@ -9,11 +9,11 @@ using Microsoft.Extensions.Logging;
 namespace MashiruDaily.Core.Services;
 
 /// <summary>
-/// Persists Hermes AI-sync settings as a single JSON object under
-/// <c>%APPDATA%\MashiruDaily\settings.json</c>.
-/// Writes are atomic (tmp file + move) so a crash never leaves a half-written file.
-/// Missing or corrupt files load as <see cref="HermesSettings.CreateDefault"/>;
-/// IO failures are logged, never thrown.
+/// 将 Hermes AI 同步设置以单个 JSON 对象持久化到
+/// <c>%APPDATA%\MashiruDaily\settings.json</c>。
+/// 写入是原子的（tmp 文件 + move），崩溃不会留下半写的文件。
+/// 缺失或损坏的文件按 <see cref="HermesSettings.CreateDefault"/> 加载；
+/// IO 失败只记录日志，绝不抛出。
 /// </summary>
 public sealed class JsonHermesSettingsRepository : IHermesSettingsRepository
 {
@@ -43,7 +43,7 @@ public sealed class JsonHermesSettingsRepository : IHermesSettingsRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to load Hermes settings from '{File}'; using defaults.", _filePath);
+            _logger.LogError(ex, "从 '{File}' 加载 Hermes 设置失败；改用默认值。", _filePath);
             return Task.FromResult(HermesSettings.CreateDefault());
         }
     }
@@ -60,7 +60,7 @@ public sealed class JsonHermesSettingsRepository : IHermesSettingsRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to save Hermes settings to '{File}'.", _filePath);
+            _logger.LogError(ex, "保存 Hermes 设置到 '{File}' 失败。", _filePath);
         }
     }
 }

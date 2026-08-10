@@ -19,9 +19,10 @@ namespace MashiruDaily;
 
 public partial class App : Application
 {
-    /// <summary>Root dependency injection container.</summary>
-    public static IServiceProvider Services { get; private set; } = null!;
     private bool _isDrainingShutdown;
+
+    /// <summary>根依赖注入容器。</summary>
+    public static IServiceProvider Services { get; private set; } = null!;
 
     public override void Initialize()
     {
@@ -37,9 +38,9 @@ public partial class App : Application
 
         var logger = Services.GetRequiredService<ILogger<App>>();
 
-        // Fire-and-forget Hermes startup sync; never block UI startup on the network.
+        // 即发即忘的 Hermes 启动同步；绝不在启动时阻塞 UI 于网络请求。
         _ = SyncStartupAsync(Services.GetRequiredService<IHermesSyncService>(), logger);
-        logger.LogInformation("MashiruDaily starting (desktop={IsDesktop}).",
+        logger.LogInformation("MashiruDaily 启动中（桌面={IsDesktop}）。",
             ApplicationLifetime is IClassicDesktopStyleApplicationLifetime);
 
         LogCjkFontResolution(logger);
@@ -72,7 +73,7 @@ public partial class App : Application
         var todoService = Services.GetRequiredService<ITodoService>();
         await todoService.FlushAsync();
 
-        // Best-effort drain of pending Hermes webhook events on exit; never block shutdown.
+        // 退出时尽力排空待处理的 Hermes Webhook 事件；绝不在关闭时阻塞。
         try
         {
             await Services.GetRequiredService<IHermesSyncService>().FlushAsync();
@@ -80,7 +81,7 @@ public partial class App : Application
         catch (Exception ex)
         {
             Services.GetRequiredService<ILogger<App>>()
-                .LogError(ex, "Hermes sync flush on shutdown failed.");
+                .LogError(ex, "关闭时的 Hermes 同步冲刷失败。");
         }
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
@@ -95,22 +96,22 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Hermes sync initialization failed.");
+            logger.LogError(ex, "Hermes 同步初始化失败。");
         }
     }
 
     private static void LogCjkFontResolution(ILogger logger)
     {
-        // Diagnostic: report which font actually provides CJK glyphs. '待' = U+5F85.
+        // 诊断：报告实际提供 CJK 字形的是哪个字体。'待' = U+5F85。
         if (FontManager.Current.TryMatchCharacter(
                 '待', FontStyle.Normal, FontWeight.Normal, FontStretch.Normal,
                 FontFamily.Default, null, out var typeface))
         {
-            logger.LogInformation("CJK glyph '待' resolved to font '{Font}'.", typeface.FontFamily.Name);
+            logger.LogInformation("CJK 字形 '待' 由字体 '{Font}' 提供。", typeface.FontFamily.Name);
         }
         else
         {
-            logger.LogWarning("CJK glyph '待' could not be resolved to any font.");
+            logger.LogWarning("CJK 字形 '待' 未能由任何字体提供。");
         }
     }
 
@@ -125,16 +126,16 @@ public partial class App : Application
             LoggingConfigurator.Configure();
         });
 
-        // Domain / infrastructure
+        // 领域 / 基础设施
         services.AddSingleton<ITodoRepository, JsonTodoRepository>();
         services.AddSingleton<ITodoService, TodoService>();
 
-        // Hermes sync
+        // Hermes 同步
         services.AddSingleton<HttpClient>();
         services.AddSingleton<IHermesSettingsRepository, JsonHermesSettingsRepository>();
         services.AddSingleton<IHermesSyncService, HermesSyncService>();
 
-        // View models
+        // 视图模型
         services.AddSingleton<TodoPageViewModel>();
         services.AddSingleton<SettingsPageViewModel>();
         services.AddSingleton<MainViewModel>();

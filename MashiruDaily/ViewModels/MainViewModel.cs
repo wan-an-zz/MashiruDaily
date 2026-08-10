@@ -2,24 +2,42 @@
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using MashiruDaily.Abstracts;
 using MashiruDaily.Assets;
 using MashiruDaily.Core.Abstracts;
 using MashiruDaily.Core.ViewModels;
 using MashiruDaily.Core.ViewModels.Todo;
 using MashiruDaily.Models;
-using CommunityToolkit.Mvvm.Input;
 
 namespace MashiruDaily.ViewModels;
 
 /// <summary>
-/// Root view-model. Exposes the available navigation items and which one is
-/// active. The same items are consumed by the desktop side menu
-/// (<c>SukiSideMenu</c>) and the mobile bottom navigation bar.
+/// 根视图模型。暴露可用的导航条目与当前激活项。
+/// 桌面侧边菜单（<c>SukiSideMenu</c>）与移动端底部导航栏消费同一批条目。
 /// </summary>
 public partial class MainViewModel : ViewModelBase
 {
     private readonly IHermesSyncService _syncService;
+
+    [ObservableProperty]
+    private string _syncStatusText = "空闲";
+
+    [ObservableProperty]
+    private bool _hasSyncError;
+
+    [ObservableProperty]
+    private int _pendingSyncCount;
+
+    [ObservableProperty]
+    private INavigationItem? _activeItem;
+
+    [ObservableProperty]
+    private int _activeIndex;
+
+    public TodoPageViewModel TodoPage { get; }
+
+    public ObservableCollection<INavigationItem> NavigationItems { get; }
 
     public MainViewModel(TodoPageViewModel todoPage, SettingsPageViewModel settingsPage, IHermesSyncService syncService)
     {
@@ -47,22 +65,8 @@ public partial class MainViewModel : ViewModelBase
         _activeIndex = 0;
     }
 
-    public TodoPageViewModel TodoPage { get; }
-
-    public ObservableCollection<INavigationItem> NavigationItems { get; }
-
-    [ObservableProperty] private string _syncStatusText = "空闲";
-    [ObservableProperty] private bool _hasSyncError;
-    [ObservableProperty] private int _pendingSyncCount;
-
     [RelayCommand]
     private Task SyncNow() => _syncService.SyncNowAsync();
-
-    [ObservableProperty]
-    private INavigationItem? _activeItem;
-
-    [ObservableProperty]
-    private int _activeIndex;
 
     partial void OnActiveItemChanged(INavigationItem? value)
     {

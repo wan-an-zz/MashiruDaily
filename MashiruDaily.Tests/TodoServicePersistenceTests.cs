@@ -23,13 +23,7 @@ public sealed class BlockingTodoRepository : ITodoRepository
     private int _activeSaves;
     private int _maxActiveSaves;
 
-    public BlockingTodoRepository(params TodoItem[] seed) => _seed = seed;
-
-    public Task<IReadOnlyList<TodoItem>> LoadAsync() => Task.FromResult(_seed);
-
     public Task FirstSaveStarted => _firstSaveStarted.Task;
-
-    public void ReleaseFirstSave() => _releaseFirstSave.TrySetResult();
 
     public int MaxActiveSaves
     {
@@ -42,6 +36,12 @@ public sealed class BlockingTodoRepository : ITodoRepository
     }
 
     public List<IReadOnlyList<TodoItem>> Saved => _saved;
+
+    public BlockingTodoRepository(params TodoItem[] seed) => _seed = seed;
+
+    public Task<IReadOnlyList<TodoItem>> LoadAsync() => Task.FromResult(_seed);
+
+    public void ReleaseFirstSave() => _releaseFirstSave.TrySetResult();
 
     public async Task SaveAsync(IReadOnlyList<TodoItem> items)
     {

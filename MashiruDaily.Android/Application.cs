@@ -16,7 +16,7 @@ namespace MashiruDaily.Android
         protected override AppBuilder CustomizeAppBuilder(AppBuilder builder)
         {
             return base.CustomizeAppBuilder(builder)
-                // Options must be bound before ConfigureFonts creates the FontManager.
+                // 选项必须在 ConfigureFonts 创建 FontManager 之前绑定。
                 .With(AppFonts.CreateFontManagerOptions())
                 .ConfigureFonts(fontManager => fontManager.AddFontCollection(new NotoSansSCFontCollection()))
                 .WithInterFont();

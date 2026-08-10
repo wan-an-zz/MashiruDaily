@@ -3,7 +3,7 @@ using System;
 namespace MashiruDaily.Core.Models;
 
 /// <summary>
-/// A single todo entry. Plain data model; state is managed by <see cref="MashiruDaily.Core.Abstracts.ITodoService"/>.
+/// 单条待办条目。纯数据模型；状态由 <see cref="MashiruDaily.Core.Abstracts.ITodoService"/> 管理。
 /// </summary>
 public sealed class TodoItem
 {
@@ -14,8 +14,8 @@ public sealed class TodoItem
     public bool IsCompleted { get; set; }
 
     /// <summary>
-    /// True once this item has been pushed to the external sync store.
-    /// Defaults to false; existing JSON files deserialize to false (backward compatible).
+    /// 该条目是否已推送到外部同步存储。
+    /// 默认为 false；已有的 JSON 文件反序列化后也是 false（向后兼容）。
     /// </summary>
     public bool HasSynced { get; set; }
 
