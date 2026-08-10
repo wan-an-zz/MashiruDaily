@@ -42,7 +42,7 @@ public sealed class HermesSettings
     public double TimeoutSeconds { get; set; } = 10;
 
     /// <summary>
-    /// 上次成功拉取时服务器 todo.json 的更新时间，ISO 8601 UTC 规范化字符串（DateTimeOffset.UtcDateTime.ToString("O")）；为空表示尚未同步（首次启动或旧版本升级），下次同步视为需要拉取。
+    /// 上次成功拉取时服务器 todo.json 的创建时间（meta 的 createdAt），ISO 8601 UTC 规范化字符串；为空表示尚未同步（首次启动或旧版本升级），下次同步视为需要拉取。
     /// </summary>
     public string? LastSyncedAt { get; set; }
 

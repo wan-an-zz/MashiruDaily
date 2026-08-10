@@ -91,13 +91,13 @@ public sealed class ThrowingHttpMessageHandler : HttpMessageHandler
 
 public class HermesSyncServiceTests : IDisposable
 {
-    private const string ServerUpdatedAt = "2026-08-10T09:00:00Z";
+    private const string ServerCreatedAt = "2026-08-10T09:00:00Z";
 
-    private const string OlderUpdatedAt = "2026-08-10T08:00:00Z";
+    private const string OlderCreatedAt = "2026-08-10T08:00:00Z";
 
-    private const string LaterUpdatedAt = "2026-08-10T10:00:00Z";
+    private const string LaterCreatedAt = "2026-08-10T10:00:00Z";
 
-    private const string ServerUpdatedAtNormalized = "2026-08-10T09:00:00.0000000Z";
+    private const string ServerCreatedAtNormalized = "2026-08-10T09:00:00.0000000Z";
 
     private readonly string _dir;
 
@@ -136,7 +136,7 @@ public class HermesSyncServiceTests : IDisposable
         ServerBaseUrl = "http://hermes.test",
         MaxRetryAttempts = 2,
         TimeoutSeconds = 5,
-        LastSyncedAt = ServerUpdatedAt,
+        LastSyncedAt = ServerCreatedAt,
     };
 
     private static FakeHttpMessageHandler CreateWebhookHandler(HttpStatusCode postStatus) =>
@@ -145,7 +145,7 @@ public class HermesSyncServiceTests : IDisposable
             if (request.Method == HttpMethod.Post)
                 return JsonResponse(postStatus, "{\"status\":\"accepted\"}");
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"))
-                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"updatedAt\":\"{ServerUpdatedAt}\"}}");
+                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"createdAt\":\"{ServerCreatedAt}\"}}");
             return new HttpResponseMessage(HttpStatusCode.NotFound);
         });
 
@@ -270,7 +270,7 @@ public class HermesSyncServiceTests : IDisposable
             }
 
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"))
-                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"updatedAt\":\"{ServerUpdatedAt}\"}}");
+                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"createdAt\":\"{ServerCreatedAt}\"}}");
             return new HttpResponseMessage(HttpStatusCode.NotFound);
         });
 
@@ -340,14 +340,14 @@ public class HermesSyncServiceTests : IDisposable
     {
         var local = new TodoItem { Title = "local", HasSynced = true };
         var settings = SyncSettings();
-        settings.LastSyncedAt = OlderUpdatedAt; // 早于服务器更新时间
+        settings.LastSyncedAt = OlderCreatedAt; // 早于服务器创建时间
 
         var handler = new FakeHttpMessageHandler(request =>
         {
             if (request.Method == HttpMethod.Post)
                 return JsonResponse(HttpStatusCode.Accepted, "{\"status\":\"accepted\"}");
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"))
-                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"updatedAt\":\"{ServerUpdatedAt}\"}}");
+                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"createdAt\":\"{ServerCreatedAt}\"}}");
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo"))
                 return JsonResponse(HttpStatusCode.OK,
                     "[{\"Id\":\"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\",\"Title\":\"Pulled A\",\"IsCompleted\":false,\"CreatedAt\":\"2026-08-10T09:00:00\",\"CompletedAt\":null}," +
@@ -367,21 +367,21 @@ public class HermesSyncServiceTests : IDisposable
         Assert.True(todoService.Items.All(x => x.HasSynced));
 
         var reloaded = await settingsRepo.LoadAsync();
-        Assert.Equal(ServerUpdatedAtNormalized, reloaded.LastSyncedAt);
+        Assert.Equal(ServerCreatedAtNormalized, reloaded.LastSyncedAt);
     }
 
     [Fact]
-    public async Task InitializeAsync_SameUpdatedAt_SkipsPullAndKeepsItems()
+    public async Task InitializeAsync_SameCreatedAt_SkipsPullAndKeepsItems()
     {
         var local = new TodoItem { Title = "keep me", HasSynced = true };
-        var settings = SyncSettings(); // LastSyncedAt 与服务器 meta updatedAt 一致
+        var settings = SyncSettings(); // LastSyncedAt 与服务器 meta createdAt 一致
 
         var handler = new FakeHttpMessageHandler(request =>
         {
             if (request.Method == HttpMethod.Post)
                 return JsonResponse(HttpStatusCode.Accepted, "{\"status\":\"accepted\"}");
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"))
-                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"updatedAt\":\"{ServerUpdatedAt}\"}}");
+                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"createdAt\":\"{ServerCreatedAt}\"}}");
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo"))
                 return JsonResponse(HttpStatusCode.OK, "[{\"Id\":\"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\",\"Title\":\"Should not be pulled\"}]");
             return new HttpResponseMessage(HttpStatusCode.NotFound);
@@ -403,14 +403,14 @@ public class HermesSyncServiceTests : IDisposable
     {
         var local = new TodoItem { Title = "unsynced", HasSynced = false };
         var settings = SyncSettings();
-        settings.LastSyncedAt = OlderUpdatedAt; // 早于服务器更新时间
+        settings.LastSyncedAt = OlderCreatedAt; // 早于服务器创建时间
 
         var handler = new FakeHttpMessageHandler(request =>
         {
             if (request.Method == HttpMethod.Post)
                 return new HttpResponseMessage(HttpStatusCode.InternalServerError);
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"))
-                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"updatedAt\":\"{LaterUpdatedAt}\"}}");
+                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"createdAt\":\"{LaterCreatedAt}\"}}");
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo"))
                 return JsonResponse(HttpStatusCode.OK,
                     "[{\"Id\":\"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\",\"Title\":\"Pulled C\",\"IsCompleted\":false,\"CreatedAt\":\"2026-08-10T09:00:00\",\"CompletedAt\":null}]");
@@ -444,7 +444,7 @@ public class HermesSyncServiceTests : IDisposable
             if (request.Method == HttpMethod.Post)
                 return JsonResponse(HttpStatusCode.Accepted, "{\"status\":\"accepted\"}");
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"))
-                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"updatedAt\":\"{ServerUpdatedAt}\"}}");
+                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"createdAt\":\"{ServerCreatedAt}\"}}");
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo"))
                 return JsonResponse(HttpStatusCode.OK,
                     "[{\"Id\":\"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\",\"Title\":\"Pulled D\",\"IsCompleted\":false,\"CreatedAt\":\"2026-08-10T09:00:00\",\"CompletedAt\":null}]");
@@ -463,7 +463,7 @@ public class HermesSyncServiceTests : IDisposable
         Assert.True(todoService.Items.All(x => x.HasSynced));
 
         var reloaded = await settingsRepo.LoadAsync();
-        Assert.Equal(ServerUpdatedAtNormalized, reloaded.LastSyncedAt);
+        Assert.Equal(ServerCreatedAtNormalized, reloaded.LastSyncedAt);
     }
 
     [Fact]
@@ -471,14 +471,14 @@ public class HermesSyncServiceTests : IDisposable
     {
         var local = new TodoItem { Title = "pending", HasSynced = false };
         var settings = SyncSettings();
-        settings.LastSyncedAt = LaterUpdatedAt; // 晚于服务器更新时间
+        settings.LastSyncedAt = LaterCreatedAt; // 晚于服务器创建时间
 
         var handler = new FakeHttpMessageHandler(request =>
         {
             if (request.Method == HttpMethod.Post)
                 return JsonResponse(HttpStatusCode.Accepted, "{\"status\":\"accepted\"}");
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"))
-                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"updatedAt\":\"{ServerUpdatedAt}\"}}");
+                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"createdAt\":\"{ServerCreatedAt}\"}}");
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo"))
                 return JsonResponse(HttpStatusCode.OK, "[{\"Id\":\"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\",\"Title\":\"Should not be pulled\"}]");
             return new HttpResponseMessage(HttpStatusCode.NotFound);
@@ -496,11 +496,11 @@ public class HermesSyncServiceTests : IDisposable
         Assert.True(item.HasSynced);
 
         var reloaded = await settingsRepo.LoadAsync();
-        Assert.Equal(LaterUpdatedAt, reloaded.LastSyncedAt);
+        Assert.Equal(LaterCreatedAt, reloaded.LastSyncedAt);
     }
 
     [Fact]
-    public async Task InitializeAsync_MissingUpdatedAt_MetaError()
+    public async Task InitializeAsync_MissingCreatedAt_MetaError()
     {
         var local = new TodoItem { Title = "untouched", HasSynced = true };
         var settings = SyncSettings();
@@ -522,7 +522,7 @@ public class HermesSyncServiceTests : IDisposable
         await syncService.InitializeAsync();
 
         Assert.Equal(SyncStatus.Error, syncService.Status);
-        Assert.Contains("updatedAt", syncService.LastError);
+        Assert.Contains("createdAt", syncService.LastError);
         Assert.DoesNotContain(handler.Requests, r => r.Method == HttpMethod.Post);
         Assert.DoesNotContain(handler.Requests, r => r.Uri.AbsolutePath.EndsWith("/api/todo"));
         var item = Assert.Single(todoService.Items);
@@ -533,14 +533,14 @@ public class HermesSyncServiceTests : IDisposable
     public async Task InitializeAsync_SameTimestamp_WithLocalPending_PushesPending()
     {
         var local = new TodoItem { Title = "pending", HasSynced = false };
-        var settings = SyncSettings(); // LastSyncedAt == meta updatedAt
+        var settings = SyncSettings(); // LastSyncedAt == meta createdAt
 
         var handler = new FakeHttpMessageHandler(request =>
         {
             if (request.Method == HttpMethod.Post)
                 return JsonResponse(HttpStatusCode.Accepted, "{\"status\":\"accepted\"}");
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"))
-                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"updatedAt\":\"{ServerUpdatedAt}\"}}");
+                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"createdAt\":\"{ServerCreatedAt}\"}}");
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo"))
                 return JsonResponse(HttpStatusCode.OK, "[]");
             return new HttpResponseMessage(HttpStatusCode.NotFound);
@@ -563,13 +563,13 @@ public class HermesSyncServiceTests : IDisposable
     [Fact]
     public async Task SyncNowAsync_ServerUpdatedLater_PullsWithoutPushing()
     {
-        var currentMetaUpdatedAt = ServerUpdatedAt;
+        var currentMetaCreatedAt = ServerCreatedAt;
         var handler = new FakeHttpMessageHandler(request =>
         {
             if (request.Method == HttpMethod.Post)
                 return JsonResponse(HttpStatusCode.Accepted, "{\"status\":\"accepted\"}");
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"))
-                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"updatedAt\":\"{currentMetaUpdatedAt}\"}}");
+                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"createdAt\":\"{currentMetaCreatedAt}\"}}");
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo"))
                 return JsonResponse(HttpStatusCode.OK,
                     "[{\"Id\":\"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\",\"Title\":\"Pulled E\",\"IsCompleted\":false,\"CreatedAt\":\"2026-08-10T09:00:00\",\"CompletedAt\":null}]");
@@ -586,7 +586,7 @@ public class HermesSyncServiceTests : IDisposable
         Assert.DoesNotContain(handler.Requests, r => r.Uri.AbsolutePath.EndsWith("/api/todo"));
 
         // 服务器更新：拉取覆盖，不推送
-        currentMetaUpdatedAt = LaterUpdatedAt;
+        currentMetaCreatedAt = LaterCreatedAt;
         await syncService.SyncNowAsync();
         Assert.Equal(SyncStatus.Success, syncService.Status);
         Assert.DoesNotContain(handler.Requests, r => r.Method == HttpMethod.Post);
