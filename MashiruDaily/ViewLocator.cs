@@ -2,7 +2,7 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
-using MashiruDaily.ViewModels;
+using MashiruDaily.Core.ViewModels;
 
 namespace MashiruDaily;
 
@@ -19,7 +19,10 @@ public class ViewLocator : IDataTemplate
         if (param is null)
             return null;
 
-        var name = param.GetType().FullName!.Replace("ViewModel", "View", StringComparison.Ordinal);
+        var fullName = param.GetType().FullName!;
+        var name = fullName
+            .Replace("MashiruDaily.Core.ViewModels", "MashiruDaily.Views", StringComparison.Ordinal)
+            .Replace("ViewModel", "View", StringComparison.Ordinal);
         var type = Type.GetType(name);
 
         if (type != null)

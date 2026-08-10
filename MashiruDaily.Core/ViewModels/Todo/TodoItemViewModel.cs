@@ -1,10 +1,10 @@
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using MashiruDaily.Abstracts;
-using MashiruDaily.Models;
+using MashiruDaily.Core.Abstracts;
+using MashiruDaily.Core.Models;
 
-namespace MashiruDaily.ViewModels.Todo;
+namespace MashiruDaily.Core.ViewModels.Todo;
 
 /// <summary>
 /// Wraps a single <see cref="TodoItem"/> for presentation. Keeps the editing

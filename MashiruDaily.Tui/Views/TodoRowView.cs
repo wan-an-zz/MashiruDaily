@@ -1,4 +1,4 @@
-using MashiruDaily.ViewModels.Todo;
+using MashiruDaily.Core.ViewModels.Todo;
 using Terminal.Gui.Configuration;
 using Terminal.Gui.Drawing;
 using Terminal.Gui.ViewBase;

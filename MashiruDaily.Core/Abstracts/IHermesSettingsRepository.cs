@@ -1,7 +1,7 @@
 using System.Threading.Tasks;
-using MashiruDaily.Models;
+using MashiruDaily.Core.Models;
 
-namespace MashiruDaily.Abstracts;
+namespace MashiruDaily.Core.Abstracts;
 
 /// <summary>
 /// Persistence abstraction for Hermes AI-sync settings. Swap the implementation

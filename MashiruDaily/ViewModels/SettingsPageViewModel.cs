@@ -5,8 +5,9 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using MashiruDaily.Abstracts;
-using MashiruDaily.Models;
+using MashiruDaily.Core.Abstracts;
+using MashiruDaily.Core.Models;
+using MashiruDaily.Core.ViewModels;
 
 namespace MashiruDaily.ViewModels;
 

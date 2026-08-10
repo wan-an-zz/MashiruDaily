@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
-using MashiruDaily.Abstracts;
-using MashiruDaily.Models;
+using MashiruDaily.Core.Abstracts;
+using MashiruDaily.Core.Models;
 using Microsoft.Extensions.Logging;
 
-namespace MashiruDaily.Services;
+namespace MashiruDaily.Core.Services;
 
 /// <summary>
 /// Persists todos as a single JSON array under <c>%APPDATA%\MashiruDaily\todos.json</c>.

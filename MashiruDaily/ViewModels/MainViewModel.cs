@@ -4,8 +4,10 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using MashiruDaily.Abstracts;
 using MashiruDaily.Assets;
+using MashiruDaily.Core.Abstracts;
+using MashiruDaily.Core.ViewModels;
+using MashiruDaily.Core.ViewModels.Todo;
 using MashiruDaily.Models;
-using MashiruDaily.ViewModels.Todo;
 using CommunityToolkit.Mvvm.Input;
 
 namespace MashiruDaily.ViewModels;

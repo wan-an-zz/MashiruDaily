@@ -1,4 +1,4 @@
-namespace MashiruDaily.Models;
+namespace MashiruDaily.Core.Models;
 
 /// <summary>
 /// Persisted settings for the Hermes AI-sync feature. Plain data model;

@@ -1,5 +1,5 @@
 using Avalonia.Media;
-using MashiruDaily.ViewModels;
+using MashiruDaily.Core.ViewModels;
 
 namespace MashiruDaily.Abstracts;
 

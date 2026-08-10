@@ -4,7 +4,7 @@ using NLog;
 using NLog.Config;
 using NLog.Targets;
 
-namespace MashiruDaily.Logging;
+namespace MashiruDaily.Core.Logging;
 
 /// <summary>
 /// Configures NLog programmatically so it works on every platform

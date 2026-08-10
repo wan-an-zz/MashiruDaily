@@ -1,7 +1,7 @@
 using System;
 using System.Security.Cryptography;
 using System.Text;
-using MashiruDaily.Services;
+using MashiruDaily.Core.Services;
 using Xunit;
 
 namespace MashiruDaily.Tests;

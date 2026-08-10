@@ -1,8 +1,8 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
-using MashiruDaily.Models;
-using MashiruDaily.Services;
+using MashiruDaily.Core.Models;
+using MashiruDaily.Core.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 

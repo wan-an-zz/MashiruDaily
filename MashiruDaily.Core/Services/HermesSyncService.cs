@@ -10,11 +10,11 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
-using MashiruDaily.Abstracts;
-using MashiruDaily.Models;
+using MashiruDaily.Core.Abstracts;
+using MashiruDaily.Core.Models;
 using Microsoft.Extensions.Logging;
 
-namespace MashiruDaily.Services;
+namespace MashiruDaily.Core.Services;
 
 /// <summary>
 /// Hermes AI-sync worker. Watches <see cref="ITodoService"/> for changes and pushes

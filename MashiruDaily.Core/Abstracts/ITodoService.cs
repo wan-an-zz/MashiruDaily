@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using MashiruDaily.Models;
+using MashiruDaily.Core.Models;
 
-namespace MashiruDaily.Abstracts;
+namespace MashiruDaily.Core.Abstracts;
 
 /// <summary>
 /// Application-level business logic for todos. It is the single source of truth

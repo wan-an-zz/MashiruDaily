@@ -1,9 +1,9 @@
 using System;
 
-namespace MashiruDaily.Models;
+namespace MashiruDaily.Core.Models;
 
 /// <summary>
-/// A single todo entry. Plain data model; state is managed by <see cref="MashiruDaily.Abstracts.ITodoService"/>.
+/// A single todo entry. Plain data model; state is managed by <see cref="MashiruDaily.Core.Abstracts.ITodoService"/>.
 /// </summary>
 public sealed class TodoItem
 {

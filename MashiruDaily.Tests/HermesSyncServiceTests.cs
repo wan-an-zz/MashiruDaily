@@ -8,9 +8,9 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using MashiruDaily.Abstracts;
-using MashiruDaily.Models;
-using MashiruDaily.Services;
+using MashiruDaily.Core.Abstracts;
+using MashiruDaily.Core.Models;
+using MashiruDaily.Core.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 

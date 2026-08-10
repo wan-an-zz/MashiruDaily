@@ -2,7 +2,7 @@ using System;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace MashiruDaily.Services;
+namespace MashiruDaily.Core.Services;
 
 /// <summary>
 /// Signs Hermes webhook requests (protocol header <c>X-Webhook-Signature-V2</c>):

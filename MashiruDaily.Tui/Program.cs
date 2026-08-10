@@ -1,8 +1,8 @@
-using MashiruDaily.Abstracts;
-using MashiruDaily.Logging;
-using MashiruDaily.Services;
+using MashiruDaily.Core.Abstracts;
+using MashiruDaily.Core.Logging;
+using MashiruDaily.Core.Services;
 using MashiruDaily.Tui.Views;
-using MashiruDaily.ViewModels.Todo;
+using MashiruDaily.Core.ViewModels.Todo;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NLog.Extensions.Logging;

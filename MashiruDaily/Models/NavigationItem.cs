@@ -1,6 +1,6 @@
 using Avalonia.Media;
 using MashiruDaily.Abstracts;
-using MashiruDaily.ViewModels;
+using MashiruDaily.Core.ViewModels;
 
 namespace MashiruDaily.Models;
 

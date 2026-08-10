@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 
-namespace MashiruDaily.Abstracts;
+namespace MashiruDaily.Core.Abstracts;
 
 /// <summary>
 /// Aggregated state of the Hermes AI-sync worker, surfaced to the UI.
