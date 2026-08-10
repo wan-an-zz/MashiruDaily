@@ -15,6 +15,11 @@ var services = ConfigureServices();
 var todoService = services.GetRequiredService<ITodoService>();
 await todoService.InitializeAsync();
 
+var sync = services.GetRequiredService<IHermesSyncService>();
+var logger = services.GetRequiredService<ILogger<Program>>();
+sync.StatusChanged += (_, _) => logger.LogInformation("Sync status: {Status}", sync.Status);
+_ = SyncStartupAsync(sync, logger);
+
 var viewModel = services.GetRequiredService<TodoPageViewModel>();
 
 IApplication app = Application.Create();
@@ -26,6 +31,8 @@ try
 finally
 {
     await todoService.FlushAsync();
+    try { await sync.FlushAsync(); }
+    catch (Exception ex) { logger.LogError(ex, "Hermes sync flush failed."); }
     app.Dispose();
 }
 
@@ -40,9 +47,18 @@ static ServiceProvider ConfigureServices()
         LoggingConfigurator.Configure();
     });
 
+    services.AddSingleton<HttpClient>();
     services.AddSingleton<ITodoRepository, JsonTodoRepository>();
     services.AddSingleton<ITodoService, TodoService>();
+    services.AddSingleton<IHermesSettingsRepository, JsonHermesSettingsRepository>();
+    services.AddSingleton<IHermesSyncService, HermesSyncService>();
     services.AddSingleton<TodoPageViewModel>();
 
     return services.BuildServiceProvider();
+}
+
+static async Task SyncStartupAsync(IHermesSyncService sync, ILogger logger)
+{
+    try { await sync.InitializeAsync(); }
+    catch (Exception ex) { logger.LogError(ex, "Hermes sync initialization failed."); }
 }
