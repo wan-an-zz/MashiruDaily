@@ -12,14 +12,16 @@
              x:DataType="vm:MainViewModel">
 
     <Border Background="{DynamicResource SukiStrongBackground}">
-        <Grid RowDefinitions="*,Auto">
+        <Grid RowDefinitions="*,Auto,Auto">
 
             <!-- Page content, resolved via ViewLocator, animated like SukiUI. -->
             <suki:SukiTransitioningContentControl Grid.Row="0"
                                                   Content="{Binding ActiveItem.Page}" />
 
+            <controls:SyncStatusBar Grid.Row="1" />
+
             <!-- SukiUI-styled bottom navigation. -->
-            <controls:BottomNavigationBar Grid.Row="1"
+            <controls:BottomNavigationBar Grid.Row="2"
                                           ItemsSource="{Binding NavigationItems}"
                                           SelectedIndex="{Binding ActiveIndex, Mode=TwoWay}">
                 <controls:BottomNavigationBar.ItemTemplate>
