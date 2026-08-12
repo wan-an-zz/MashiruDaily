@@ -1,0 +1,182 @@
+# MashiruDaily.Server 运维手册
+
+> 本文档是 MashiruDaily.Server（Python 后端）的运维手册。仓库采取测试先行（TDD）开发：先写契约测试（RED），再实现 `app/main.py` 转绿。当前 `pytest MashiruDaily.Server/tests -v` 7 个用例全部通过。
+
+## 1. 项目概览
+
+MashiruDaily.Server 是一个轻量 Python 后端，承担两个职责：一是**拉取服务器**，以 FastAPI 提供两个只读 GET 端点，供 MashiruDaily 客户端（Avalonia 桌面 / Android / TUI）上线时拉取权威当日待办列表；二是**Hermes 装配工具集**，一键把本机安装的 Hermes Agent 配置为可接收 webhook、每日维护 todo.json 的智能体（示例 skill、每日 cron、登录自启）。
+
+数据位于 `data/`：`todo.json`（PascalCase 字段）是服务器侧唯一数据源，`todo-meta.json` 是侧车文件，专为客户端拉取决策记录 `createdAt`。服务器对数据只读，真正的写者是 Hermes Agent（每日 cron 例行更新 + webhook 事件即时更新）。
+
+同步拓扑（权威契约见 `docs/design/通信协议.md`）：
+
+- 客户端 → Hermes：带 HMAC-SHA256 签名的 webhook POST，地址 `http://<主机>:8644/webhooks/todo-sync`，由 Hermes 内置网关处理，据此更新 `todo.json`。
+- 客户端 → 本服务器：`GET /api/todo/meta` 与 `GET /api/todo`，只读，不修改任何服务器状态。
+
+## 2. 目录结构
+
+```
+MashiruDaily.Server/
+├── app/                     FastAPI 应用
+│   ├── config.py            运行设置，由环境变量 MASHIRU_DATA_DIR / MASHIRU_HOST / MASHIRU_PORT / HERMES_HOME 驱动
+│   ├── todo_store.py        todo.json 与 todo-meta.json 的纯读取/初始化函数（无 HTTP 层）
+│   └── main.py              FastAPI 入口与 GET 端点（`python -m app.main`）
+├── tools/
+│   ├── stamp_todo_meta.py   每日戳记脚本，唯一允许改变 createdAt 的代码路径
+│   └── test_webhook_signed.py  签名 webhook 冒烟测试（模拟客户端推送，含 --negative 负例）
+├── skills/
+│   └── mashiru-todo/        示例 skill（SKILL.md），供 Hermes 在 webhook / cron 任务中调用
+├── tests/
+│   └── test_api.py          GET 端点契约的 pytest 集成测试（离线）
+├── setup_server.py          一次性初始化：创建 .venv、安装依赖、初始化 data/、盖章初始 meta（幂等）
+├── register_skills.py       把 skills/ 注册进 Hermes 的 skills.external_dirs（幂等）
+├── configure_webhook.py     配置 Hermes webhook 平台与 todo-sync 路由（幂等，需密钥）
+├── configure_cron.py        创建每日 Hermes cron 任务 mashiru-daily（幂等）
+├── install_autostart.py     注册 Windows 登录自启计划任务（幂等，仅 Windows）
+├── _config.py               共享工具：定位 hermes、备份 config.yaml、round-trip 读写
+└── requirements.txt         fastapi / uvicorn / ruamel.yaml / pytest / httpx
+```
+
+## 3. 快速开始
+
+**第一步：初始化**（前置条件：已装 Python 3 与本机 Hermes Agent。用系统 Python 运行，脚本只用标准库，无第三方依赖）：
+
+```powershell
+python setup_server.py
+```
+
+脚本依次完成四件事：创建虚拟环境 `.venv`（已存在则跳过）、用 `.venv` 的 pip 安装 `requirements.txt`、创建 `data/`、运行 `tools/stamp_todo_meta.py` 生成初始侧车。可加 `--venv <目录名>` 自定义虚拟环境名。幂等可重复运行，若检测到已在虚拟环境中会给出警告。
+
+**第二步：启动拉取服务器**：
+
+```powershell
+.venv\Scripts\python.exe -m app.main
+```
+
+也可用 `install_autostart.py` 注册登录自启（用 pythonw.exe，不弹控制台窗口），见第 5 节。
+
+**第三步：验证**：
+
+```powershell
+curl http://localhost:8123/health
+curl http://localhost:8123/api/todo/meta
+curl http://localhost:8123/api/todo
+```
+
+`/health` 返回存活状态；`/api/todo/meta` 返回 `{date, createdAt, count}`；`/api/todo` 返回 PascalCase 待办数组。Windows PowerShell 中 `curl` 是 Invoke-WebRequest 别名，装了 curl.exe 可改用 `curl.exe`。默认监听 `0.0.0.0:8123`，可用环境变量 `MASHIRU_HOST` / `MASHIRU_PORT` / `MASHIRU_DATA_DIR` 覆盖。
+
+**第四步：装配 Hermes**，按第 5 节顺序执行 register_skills → configure_webhook → configure_cron。
+
+## 4. 客户端设置对照表（重要）
+
+在 MashiruDaily 客户端设置页填写以下值（契约见 `docs/design/通信协议.md`）：
+
+| 客户端设置项 | 值 | 说明 |
+|---|---|---|
+| `ServerBaseUrl` | `http://<主机>:8123` | 拉取服务器（本服务器） |
+| `HermesBaseUrl` | `http://<主机>:8644` | Hermes webhook 网关 |
+| `WebhookRouteName` | `todo-sync` | 拼成 `POST http://<主机>:8644/webhooks/todo-sync` |
+| `WebhookSecret` | 与第 5 节 `configure_webhook.py --secret` 的值一致 | HMAC-SHA256 签名密钥 |
+
+`<主机>` 为本机局域网地址（如 `192.168.1.100`）。Android 客户端经局域网访问，所以服务器必须监听 `0.0.0.0`（默认即是）。注意 `ServerBaseUrl` 在客户端默认与 `HermesBaseUrl` 相同（8644），因拉取服务器独立在 8123，须手动改为 `http://<主机>:8123`。客户端数据落盘于 `%APPDATA%\MashiruDaily\`（`todos.json` + `settings.json`）。
+
+## 5. 配置脚本用法
+
+四个脚本全部幂等，重复运行不产生改动。其中直接修改 `HERMES_HOME/config.yaml` 的两个（register_skills、configure_webhook）**只在真正修改前**备份为 `config.yaml.bak-<时间戳>`；configure_cron 走 `hermes cron` 命令、install_autostart 走 schtasks，不触碰 config.yaml。统一用 `.venv` 内的 Python 运行（改 config.yaml 的两个依赖 ruamel.yaml，必须如此）。Hermes 与 config.yaml 的定位：默认 `%LOCALAPPDATA%\hermes`，可用环境变量 `HERMES_HOME` 覆盖。
+
+**register_skills.py**：把 `skills/` 目录以绝对路径写入 config.yaml 的 `skills.external_dirs`（不存在则创建，已包含则跳过）：
+
+```powershell
+.venv\Scripts\python.exe register_skills.py
+```
+
+**configure_webhook.py**：合并 `platforms.webhook = {enabled, extra:{port: 8644, routes:{todo-sync:{...}}}}` 到 config.yaml。其它平台（如 qqbot）与既有路由一律保留，只覆盖 todo-sync。写入后校验，默认执行 `hermes gateway restart`（webhook 变更需重启生效，网关连接会短暂断开）。不想自动重启、只打印命令时加 `--no-restart`：
+
+```powershell
+.venv\Scripts\python.exe configure_webhook.py --secret <密钥>
+.venv\Scripts\python.exe configure_webhook.py --secret <密钥> --no-restart
+```
+
+密钥必须来自 `--secret` 参数或环境变量 `MASHIRU_WEBHOOK_SECRET`（二选一必填），脚本拒绝硬编码与交互输入。**密钥是运行时秘密，禁止写进代码、config.yaml 或任何提交内容**：
+
+```powershell
+$env:MASHIRU_WEBHOOK_SECRET = "<密钥>"
+.venv\Scripts\python.exe configure_webhook.py
+```
+
+**configure_cron.py**：创建每日 Hermes cron 任务 `mashiru-daily`（默认每日 09:00，表达式 `0 9 * * *`）。提示词要求 Hermes 检查并更新 `data/todo.json` 与 `data/plan.md`，且在每次运行结束时执行 `python tools/stamp_todo_meta.py` 刷新 createdAt。已存在则跳过。可选 `--name`、`--schedule`、`--workdir`：
+
+```powershell
+.venv\Scripts\python.exe configure_cron.py
+.venv\Scripts\python.exe configure_cron.py --schedule "0 9 * * *"
+```
+
+**install_autostart.py**：注册 Windows 登录自启计划任务 `MashiruDailyServer`（`schtasks /SC ONLOGON`，命令为 `pythonw.exe -m app.main`），仅支持 Windows。三个参数互斥：
+
+```powershell
+.venv\Scripts\python.exe install_autostart.py              # 注册
+.venv\Scripts\python.exe install_autostart.py --disable    # 临时禁用（不删除）
+.venv\Scripts\python.exe install_autostart.py --enable     # 重新启用
+.venv\Scripts\python.exe install_autostart.py --uninstall  # 删除任务
+```
+
+## 6. createdAt 语义（重要）
+
+`todo-meta.json` 的 `createdAt` 是客户端判定「是否需要拉取」的主字段（协议 5.1、5.3）：
+
+- `createdAt` **只在 `tools/stamp_todo_meta.py` 运行时改变**。运行时机仅两处：`setup_server.py` 首次引导，以及每日 cron agent 每次运行结束时（configure_cron.py 的提示词已内建该步骤）。
+- **webhook 驱动的 `todo.json` 修改绝不改变 `createdAt`**。Hermes 收到 webhook 后直接编辑 `todo.json`，不要碰侧车。否则客户端每次 webhook 同步后都会因时间戳更新而误判「需要拉取」，造成无谓的全量拉取。
+- `count` 始终是实时值：`GET /api/todo/meta` 返回前取 `len(todo.json)`，侧车里的旧 count 不参与。
+
+## 7. 数据文件
+
+**`data/todo.json`**：PascalCase，与客户端本地 `todos.json` 字段完全一致，**不含 `HasSynced`**（客户端本地字段，禁止传输）：
+
+```json
+[
+  {
+    "Id": "22222222-2222-2222-2222-222222222222",
+    "Title": "买菜",
+    "IsCompleted": true,
+    "CreatedAt": "2026-08-10T09:00:00+08:00",
+    "CompletedAt": "2026-08-10T11:30:00+08:00"
+  }
+]
+```
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `Id` | string (GUID) | 条目唯一标识 |
+| `Title` | string | 标题 |
+| `IsCompleted` | bool | 是否已完成 |
+| `CreatedAt` | string (ISO 8601) | 创建时间 |
+| `CompletedAt` | string (ISO 8601) 或 null | 完成时间，未完成时为 null |
+
+**`data/todo-meta.json`**：恰好三个字段：
+
+```json
+{ "date": "2026-08-10", "createdAt": "2026-08-10T09:00:00Z", "count": 12 }
+```
+
+`date` 为当日日期（yyyy-MM-dd，兼容保留）；`createdAt` 为 ISO 8601 UTC（Z 结尾，兼容 C# 端 AssumeUniversal 解析）；`count` 为实时条数。
+
+**`data/plan.md`**：每日计划，由 Hermes Agent 维护。边界行为：`todo.json` 缺失时 `GET /api/todo` 返回空数组，非法 JSON 返回 500；侧车缺失时首次请求 meta 自动创建。
+
+## 8. 测试
+
+仓库根目录运行（完全离线，无网络请求）：
+
+```powershell
+pytest MashiruDaily.Server/tests -v
+```
+
+覆盖：meta 结构合法、`GET /api/todo` 逐字回显 PascalCase 且无 `HasSynced`、空目录返回空数组、首次请求自动建侧车、非法 JSON 返回 500、webhook 式编辑不改 createdAt 而 stamp 会改、count 实时反映条数。已全部通过。
+
+另可运行 `tools/test_webhook_signed.py` 做端到端冒烟：向 Hermes 网关 `:8644/webhooks/todo-sync` 发送签名事件（`--secret` 必填），2xx 即成功；`--negative` 用错误密钥验证网关返回 401。
+
+## 9. 端口
+
+| 端口 | 用途 | 说明 |
+|---|---|---|
+| 8123 | 拉取服务器（FastAPI） | 默认监听 `0.0.0.0`，局域网客户端可访问；用 `MASHIRU_PORT` 覆盖 |
+| 8644 | Hermes webhook 网关 | 客户端 `POST /webhooks/todo-sync` 的目标；由 Hermes 配置，见第 5 节 |
