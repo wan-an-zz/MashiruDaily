@@ -10,3 +10,8 @@ docs/design/*
 !docs/design/通信协议.md
 !docs/design/通信协议示例.json
 .omo
+MashiruDaily.Server/.venv/
+MashiruDaily.Server/__pycache__/
+MashiruDaily.Server/data/
+MashiruDaily.Server/.pytest_cache/
+MashiruDaily.Server/**/__pycache__/

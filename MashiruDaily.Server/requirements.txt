@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+ruamel.yaml
+# 开发/测试依赖
+pytest
+httpx
