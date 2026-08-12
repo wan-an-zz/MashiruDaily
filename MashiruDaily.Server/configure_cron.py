@@ -1,0 +1,104 @@
+"""创建 Hermes 每日定时任务 mashiru-daily（幂等）。
+
+- 先执行 `hermes cron list` 检查：任务已存在则打印“已存在，跳过”并以 0 退出；
+- 否则执行 `hermes cron create "<schedule>" "<prompt>" --name mashiru-daily --workdir <Server目录>`；
+- 创建成功后再次打印 `hermes cron list` 确认。
+
+用法：
+    .venv\\Scripts\\python.exe configure_cron.py
+    .venv\\Scripts\\python.exe configure_cron.py --schedule "0 9 * * *"
+"""
+
+import argparse
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+import _config  # 本目录共享的 Hermes 配置工具
+
+# 默认 cron 表达式：每日 09:00
+DEFAULT_SCHEDULE = "0 9 * * *"
+
+
+def _run_cmd(cmd, timeout):
+    """运行 hermes 子命令；超时（或异常）时给出清晰错误并以退出码 1 结束。"""
+    try:
+        return _config.run_command(cmd, timeout=timeout)
+    except TimeoutError:
+        print(f"错误：命令超时（>{timeout}s）：{subprocess.list2cmdline(cmd)}", file=sys.stderr)
+        sys.exit(1)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="创建每日的 Hermes 定时任务 mashiru-daily（幂等，已存在则跳过）"
+    )
+    parser.add_argument("--name", default="mashiru-daily", help="任务名称（默认 mashiru-daily）")
+    parser.add_argument("--schedule", default=DEFAULT_SCHEDULE, help="cron 表达式（默认每日 09:00：0 9 * * *）")
+    parser.add_argument("--workdir", default=None, help="任务工作目录（默认本 Server 目录）")
+    args = parser.parse_args()
+
+    # 定位 hermes 可执行文件
+    hermes = _config.find_hermes_exe()
+    if hermes is None:
+        print("错误：找不到 hermes 可执行文件。", file=sys.stderr)
+        print("请确认已安装 Hermes Agent（%LOCALAPPDATA%\\hermes\\hermes-agent\\venv\\Scripts\\hermes.exe），", file=sys.stderr)
+        print("或将其加入 PATH，或设置 HERMES_HOME 环境变量。", file=sys.stderr)
+        return 1
+
+    server_root = Path(__file__).resolve().parent
+    workdir = _config.forward_slashes(Path(args.workdir) if args.workdir else server_root)
+
+    # 步骤 1：查询现有任务（幂等检查）
+    print(f"运行: {subprocess.list2cmdline([hermes, 'cron', 'list'])}")
+    result = _run_cmd([hermes, "cron", "list"], timeout=60)
+    if result.returncode != 0:
+        print("错误：hermes cron list 执行失败。", file=sys.stderr)
+        print(result.stderr.strip() or result.stdout.strip(), file=sys.stderr)
+        return 1
+    list_output = (result.stdout or "") + (result.stderr or "")
+    if list_output.strip():
+        print(list_output.strip())
+    if re.search(rf"\b{re.escape(args.name)}\b", list_output):
+        print(f"[SKIP] cron 任务 {args.name} 已存在，跳过。")
+        return 0
+
+    # 构造占位提示词（后续由用户替换，自包含、可独立执行）
+    todo_json = _config.forward_slashes(server_root / "data" / "todo.json")
+    plan_md = _config.forward_slashes(server_root / "data" / "plan.md")
+    prompt = (
+        f"这是每日例行任务（当前为占位提示词，之后可替换）。"
+        f"请检查 {todo_json} 中今天（当日日期）的待办事项，必要时生成或修正记录"
+        f"（PascalCase 字段 Id/Title/IsCompleted/CreatedAt/CompletedAt，禁止传输 HasSynced）；"
+        f"按需更新 {plan_md}。"
+        f"最后必须从工作目录执行 `python tools/stamp_todo_meta.py`，以刷新数据元信息 createdAt。"
+        f"若今日没有需要处理的事项，回复 [SILENT]。"
+    )
+
+    # 步骤 2：创建任务
+    create_cmd = [hermes, "cron", "create", args.schedule, prompt, "--name", args.name, "--workdir", workdir]
+    print(f"\n运行: {subprocess.list2cmdline(create_cmd)}")
+    result = _run_cmd(create_cmd, timeout=120)
+    if result.returncode != 0:
+        print("错误：hermes cron create 执行失败。", file=sys.stderr)
+        print(result.stderr.strip() or result.stdout.strip(), file=sys.stderr)
+        return 1
+    if result.stdout.strip():
+        print(result.stdout.strip())
+    print(f"[OK] cron 任务 {args.name} 创建成功。")
+
+    # 步骤 3：再次列出确认
+    print("\n创建后的 hermes cron list 输出：")
+    result = _run_cmd([hermes, "cron", "list"], timeout=60)
+    if result.returncode != 0:
+        print("警告：hermes cron list 确认查询失败。", file=sys.stderr)
+        print(result.stderr.strip() or result.stdout.strip(), file=sys.stderr)
+    else:
+        print((result.stdout or "").strip())
+    print("\n提示：当前提示词为占位内容，请按需替换（例如通过 hermes cron 修改或编辑 HERMES_HOME/cron/jobs.json）。")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
