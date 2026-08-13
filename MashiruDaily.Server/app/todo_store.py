@@ -63,11 +63,15 @@ def load_todo_list() -> list[TodoRecord]:
 
 
 def _read_meta(path: Path) -> TodoMeta:
-    """读取已存在的侧车文件；JSON 非法抛 ValueError。"""
+    """读取已存在的侧车文件；JSON 非法或结构不符合 {date, createdAt, count} 抛 ValueError。"""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise ValueError(f"todo-meta.json 解析失败（{path}）：{exc}") from exc
+    # 形状校验：手改或旧版本写入的侧车若缺键，后续 current_meta 会抛 KeyError，
+    # 与其余路径的 ValueError→500 JSON 不一致，这里统一为明确的 ValueError。
+    if not isinstance(data, dict) or not {"date", "createdAt", "count"}.issubset(data):
+        raise ValueError(f"todo-meta.json 结构不合法（{path}）：需要 date/createdAt/count 三键")
     return data
 
 

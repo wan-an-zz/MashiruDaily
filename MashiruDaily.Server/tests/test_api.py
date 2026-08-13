@@ -164,6 +164,37 @@ def test_malformed_todo_json_returns_500(client, data_dir) -> None:
     assert resp.status_code == 500
 
 
+def test_meta_sidecar_malformed_shape_returns_json_500(client, data_dir) -> None:
+    """todo-meta.json 可解析但结构缺键时，GET /api/todo/meta 应返回 500 且 body 为 JSON detail。
+
+    回归防护：修复前 _read_meta 不校验形状，current_meta 的 meta["date"] 会抛 KeyError，
+    落到 FastAPI 默认 500 HTML；修复后统一走 ValueError→500 JSON，与其余错误路径一致。
+    """
+    # Given: 写入缺键的侧车（如手改或旧版本产生）
+    _atomic_write(data_dir / "todo-meta.json", '{"date": "2026-08-12"}')
+
+    # When: 请求元数据
+    resp = client.get("/api/todo/meta")
+
+    # Then: 500 且为 JSON 错误体（非 HTML 错误页）
+    assert resp.status_code == 500
+    body = resp.json()
+    assert "detail" in body
+
+
+def test_meta_sidecar_non_object_returns_json_500(client, data_dir) -> None:
+    """todo-meta.json 顶层不是对象（如数组/字符串）时同样返回 500 JSON。"""
+    # Given: 写入顶层为数组的侧车
+    _atomic_write(data_dir / "todo-meta.json", "[1, 2, 3]")
+
+    # When: 请求元数据
+    resp = client.get("/api/todo/meta")
+
+    # Then: 500 且为 JSON 错误体
+    assert resp.status_code == 500
+    assert "detail" in resp.json()
+
+
 def test_created_at_survives_webhook_edit_but_stamp_changes_it(client, data_dir) -> None:
     """webhook 式编辑后 createdAt 不变（count 增加）；stamp_todo_meta.py 运行后 createdAt 改变。"""
     # Given: 初始 todo.json 与侧车
