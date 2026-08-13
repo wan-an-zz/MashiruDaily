@@ -333,7 +333,11 @@ def _install_systemd(args) -> int:
 
 
 def _read_crontab() -> list:
-    """读取当前 crontab 内容（无任务时为空列表）。"""
+    """读取当前 crontab 内容（无任务时为空列表）。
+
+    兼容不同实现：部分平台（BSD/macOS）把 "no crontab for <user>" 打到 stdout，
+    另一些打到 stderr——因此两者都检查。
+    """
     try:
         result = subprocess.run(
             ["crontab", "-l"], capture_output=True, text=True, errors="replace", timeout=30
@@ -341,7 +345,8 @@ def _read_crontab() -> list:
     except subprocess.TimeoutExpired:
         print("[FAIL] 读取 crontab 超时。", file=sys.stderr)
         raise RuntimeError("crontab -l 超时")
-    if result.returncode != 0 and "no crontab" not in (result.stderr or "").lower():
+    output_text = ((result.stdout or "") + (result.stderr or "")).lower()
+    if result.returncode != 0 and "no crontab" not in output_text:
         print(f"[FAIL] 读取 crontab 失败（退出码 {result.returncode}）。", file=sys.stderr)
         if result.stderr.strip():
             print(result.stderr.strip(), file=sys.stderr)
