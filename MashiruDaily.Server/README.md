@@ -4,7 +4,7 @@
 
 ## 1. 项目概览
 
-MashiruDaily.Server 是一个轻量 Python 后端，承担两个职责：一是**拉取服务器**，以 FastAPI 提供两个只读 GET 端点，供 MashiruDaily 客户端（Avalonia 桌面 / Android / TUI）上线时拉取权威当日待办列表；二是**Hermes 装配工具集**，一键把本机安装的 Hermes Agent 配置为可接收 webhook、每日维护 todo.json 的智能体（示例 skill、每日 cron、登录自启）。
+MashiruDaily.Server 是一个轻量 Python 后端，承担两个职责：一是**拉取服务器**，以 FastAPI 提供两个只读 GET 端点，供 MashiruDaily 客户端（Avalonia 桌面 / Android / TUI）上线时拉取权威当日待办列表；二是**Hermes 装配工具集**，一键把本机安装的 Hermes Agent 配置为可接收 webhook、每日维护 todo.json 的智能体（示例 skill、每日 cron、物理开机自启）。
 
 数据位于 `data/`：`todo.json`（PascalCase 字段）是服务器侧唯一数据源，`todo-meta.json` 是侧车文件，专为客户端拉取决策记录 `createdAt`。服务器对数据只读，真正的写者是 Hermes Agent（每日 cron 例行更新 + webhook 事件即时更新）。
 
@@ -32,7 +32,7 @@ MashiruDaily.Server/
 ├── register_skills.py       把 skills/ 注册进 Hermes 的 skills.external_dirs（幂等）
 ├── configure_webhook.py     配置 Hermes webhook 平台与 todo-sync 路由（幂等，需密钥）
 ├── configure_cron.py        创建每日 Hermes cron 任务 mashiru-daily（幂等）
-├── install_autostart.py     开机自启（Windows: 注册表 Run；Linux/macOS: systemd/crontab）
+├── install_autostart.py     物理开机自启（Windows: schtasks ONSTART；Linux/macOS: systemd 系统服务/crontab）
 ├── _config.py               共享工具：定位 hermes、备份 config.yaml、round-trip 读写
 └── requirements.txt         fastapi / uvicorn / ruamel.yaml / pytest / httpx
 ```
@@ -53,7 +53,7 @@ python setup_server.py
 .venv\Scripts\python.exe -m app.main
 ```
 
-也可用 `install_autostart.py` 注册开机自启（Windows 用 pythonw.exe 不弹控制台窗口；Linux/macOS 用 systemd 或 crontab），见第 5 节。
+也可用 `install_autostart.py` 注册**物理开机自启**（系统启动即运行、无需登录；Windows 用 schtasks ONSTART + SYSTEM，Linux/macOS 用 systemd 系统服务或 crontab @reboot），见第 5 节。
 
 **第三步：验证**：
 
@@ -111,15 +111,17 @@ $env:MASHIRU_WEBHOOK_SECRET = "<密钥>"
 .venv\Scripts\python.exe configure_cron.py --schedule "0 9 * * *"
 ```
 
-**install_autostart.py**：注册开机自启（跨平台，幂等）。Windows 用注册表 `HKCU\...\Run` 登录自启（pythonw.exe 无控制台窗口，**免管理员**——schtasks 的 ONLOGON 触发器需提权，普通用户会 Access denied）；Linux/macOS 优先 **systemd 用户服务**（`mashirudaily-server.service`，支持崩溃自动重启与网络就绪后启动，**全程无需 sudo**；仅 headless/无人登录场景需一次性执行 `sudo loginctl enable-linger $USER` 让服务在开机时即启动，仅登录后自启则完全免 sudo），无 systemd 时回退 **crontab `@reboot`**（同样免 sudo，由 cron 守护进程在系统启动时执行）。四个参数互斥，`--dry-run` 只打印将执行的命令：
+**install_autostart.py**：注册**物理开机自启**（系统启动即运行、不依赖登录；幂等）。Windows 用 `schtasks /SC ONSTART /RU SYSTEM`（系统启动即触发、SYSTEM 账户无需登录免密码），**需要管理员权限**——脚本非管理员时自动弹 UAC 提权重启自身，`--dry-run` 可先演练；Linux/macOS 优先 **systemd 系统服务**（`/etc/systemd/system/mashirudaily-server.service`，`WantedBy=multi-user.target`，物理开机自启 + 崩溃自动重启 + 网络就绪后启动），**需要 root/sudo**——脚本非 root 时自动加 sudo 前缀；无 systemd 时回退 **crontab `@reboot`**（cron 守护进程开机即执行，无需登录、**免 sudo**，但无崩溃自动重启与依赖排序）。四个参数互斥，`--dry-run` 只打印将执行的命令：
 
 ```powershell
-.venv\Scripts\python.exe install_autostart.py              # 注册自启
+.venv\Scripts\python.exe install_autostart.py              # 注册物理开机自启
 .venv\Scripts\python.exe install_autostart.py --disable    # 临时禁用（不删除）
 .venv\Scripts\python.exe install_autostart.py --enable     # 重新启用
 .venv\Scripts\python.exe install_autostart.py --uninstall  # 删除自启
 .venv\Scripts\python.exe install_autostart.py --dry-run    # 演练：只打印命令不执行
 ```
+
+> 说明：物理开机启动属于系统级能力，OS 安全模型要求管理员/sudo（Windows 的 ONSTART 触发器、Linux 写 `/etc/systemd/system`）。免提权的唯一轻量替代是 crontab `@reboot`。注意区分：注册表 `HKCU\...\Run` 与 systemd **用户**服务（`systemctl --user`）都是**登录后**启动，不满足物理开机需求，故本脚本不采用。
 
 ## 6. createdAt 语义（重要）
 
