@@ -32,7 +32,7 @@ MashiruDaily.Server/
 ├── register_skills.py       把 skills/ 注册进 Hermes 的 skills.external_dirs（幂等）
 ├── configure_webhook.py     配置 Hermes webhook 平台与 todo-sync 路由（幂等，需密钥）
 ├── configure_cron.py        创建每日 Hermes cron 任务 mashiru-daily（幂等）
-├── install_autostart.py     注册 Windows 登录自启计划任务（幂等，仅 Windows）
+├── install_autostart.py     开机自启（Windows: 注册表 Run；Linux/macOS: systemd/crontab）
 ├── _config.py               共享工具：定位 hermes、备份 config.yaml、round-trip 读写
 └── requirements.txt         fastapi / uvicorn / ruamel.yaml / pytest / httpx
 ```
@@ -53,7 +53,7 @@ python setup_server.py
 .venv\Scripts\python.exe -m app.main
 ```
 
-也可用 `install_autostart.py` 注册登录自启（用 pythonw.exe，不弹控制台窗口），见第 5 节。
+也可用 `install_autostart.py` 注册开机自启（Windows 用 pythonw.exe 不弹控制台窗口；Linux/macOS 用 systemd 或 crontab），见第 5 节。
 
 **第三步：验证**：
 
@@ -82,7 +82,7 @@ curl http://localhost:8123/api/todo
 
 ## 5. 配置脚本用法
 
-四个脚本全部幂等，重复运行不产生改动。其中直接修改 `HERMES_HOME/config.yaml` 的两个（register_skills、configure_webhook）**只在真正修改前**备份为 `config.yaml.bak-<时间戳>`；configure_cron 走 `hermes cron` 命令、install_autostart 走 schtasks，不触碰 config.yaml。统一用 `.venv` 内的 Python 运行（改 config.yaml 的两个依赖 ruamel.yaml，必须如此）。Hermes 与 config.yaml 的定位：默认 `%LOCALAPPDATA%\hermes`，可用环境变量 `HERMES_HOME` 覆盖。
+四个脚本全部幂等，重复运行不产生改动。其中直接修改 `HERMES_HOME/config.yaml` 的两个（register_skills、configure_webhook）**只在真正修改前**备份为 `config.yaml.bak-<时间戳>`；configure_cron 走 `hermes cron` 命令、install_autostart 走注册表/systemd/crontab，不触碰 config.yaml。统一用 `.venv` 内的 Python 运行（改 config.yaml 的两个依赖 ruamel.yaml，必须如此）。Hermes 与 config.yaml 的定位：默认 `%LOCALAPPDATA%\hermes`，可用环境变量 `HERMES_HOME` 覆盖。
 
 **register_skills.py**：把 `skills/` 目录以绝对路径写入 config.yaml 的 `skills.external_dirs`（不存在则创建，已包含则跳过）：
 
@@ -111,13 +111,14 @@ $env:MASHIRU_WEBHOOK_SECRET = "<密钥>"
 .venv\Scripts\python.exe configure_cron.py --schedule "0 9 * * *"
 ```
 
-**install_autostart.py**：注册 Windows 登录自启计划任务 `MashiruDailyServer`（`schtasks /SC ONLOGON`，命令为 `pythonw.exe -m app.main`），仅支持 Windows。三个参数互斥：
+**install_autostart.py**：注册开机自启（跨平台，幂等）。Windows 用注册表 `HKCU\...\Run` 登录自启（pythonw.exe 无控制台窗口，**免管理员**——schtasks 的 ONLOGON 触发器需提权，普通用户会 Access denied）；Linux/macOS 优先 **systemd 用户服务**（`mashirudaily-server.service`，支持崩溃自动重启与网络就绪后启动，建议配合 `loginctl enable-linger $USER` 实现无登录自启），无 systemd 时回退 **crontab `@reboot`**。四个参数互斥，`--dry-run` 只打印将执行的命令：
 
 ```powershell
-.venv\Scripts\python.exe install_autostart.py              # 注册
+.venv\Scripts\python.exe install_autostart.py              # 注册自启
 .venv\Scripts\python.exe install_autostart.py --disable    # 临时禁用（不删除）
 .venv\Scripts\python.exe install_autostart.py --enable     # 重新启用
-.venv\Scripts\python.exe install_autostart.py --uninstall  # 删除任务
+.venv\Scripts\python.exe install_autostart.py --uninstall  # 删除自启
+.venv\Scripts\python.exe install_autostart.py --dry-run    # 演练：只打印命令不执行
 ```
 
 ## 6. createdAt 语义（重要）
