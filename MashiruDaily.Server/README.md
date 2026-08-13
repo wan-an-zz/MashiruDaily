@@ -111,7 +111,7 @@ $env:MASHIRU_WEBHOOK_SECRET = "<密钥>"
 .venv\Scripts\python.exe configure_cron.py --schedule "0 9 * * *"
 ```
 
-**install_autostart.py**：注册开机自启（跨平台，幂等）。Windows 用注册表 `HKCU\...\Run` 登录自启（pythonw.exe 无控制台窗口，**免管理员**——schtasks 的 ONLOGON 触发器需提权，普通用户会 Access denied）；Linux/macOS 优先 **systemd 用户服务**（`mashirudaily-server.service`，支持崩溃自动重启与网络就绪后启动，建议配合 `loginctl enable-linger $USER` 实现无登录自启），无 systemd 时回退 **crontab `@reboot`**。四个参数互斥，`--dry-run` 只打印将执行的命令：
+**install_autostart.py**：注册开机自启（跨平台，幂等）。Windows 用注册表 `HKCU\...\Run` 登录自启（pythonw.exe 无控制台窗口，**免管理员**——schtasks 的 ONLOGON 触发器需提权，普通用户会 Access denied）；Linux/macOS 优先 **systemd 用户服务**（`mashirudaily-server.service`，支持崩溃自动重启与网络就绪后启动，**全程无需 sudo**；仅 headless/无人登录场景需一次性执行 `sudo loginctl enable-linger $USER` 让服务在开机时即启动，仅登录后自启则完全免 sudo），无 systemd 时回退 **crontab `@reboot`**（同样免 sudo，由 cron 守护进程在系统启动时执行）。四个参数互斥，`--dry-run` 只打印将执行的命令：
 
 ```powershell
 .venv\Scripts\python.exe install_autostart.py              # 注册自启
