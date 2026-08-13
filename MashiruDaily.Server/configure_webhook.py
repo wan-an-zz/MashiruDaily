@@ -12,6 +12,7 @@
 """
 
 import argparse
+import copy
 import io
 import os
 import sys
@@ -62,11 +63,28 @@ def _webhook_identical(webhook, desired: dict) -> bool:
     )
 
 
+def _redact_secret(webhook) -> dict:
+    """深拷贝 webhook 配置块，并把全局与各路由的 secret 掩码为 ***，用于安全打印。
+
+    原 webhook 块来自 config 活数据，直接修改会污染内存中的配置；必须深拷贝。
+    """
+    masked = copy.deepcopy(webhook)
+    extra = masked.get("extra")
+    if isinstance(extra, dict) and "secret" in extra:
+        extra["secret"] = "***"
+    routes = extra.get("routes") if isinstance(extra, dict) else None
+    if isinstance(routes, dict):
+        for route in routes.values():
+            if isinstance(route, dict) and "secret" in route:
+                route["secret"] = "***"
+    return masked
+
+
 def _print_webhook_block(webhook) -> None:
-    """以 YAML 形式打印当前 platforms.webhook 子块。"""
+    """以 YAML 形式打印当前 platforms.webhook 子块（secret 一律掩码为 ***，防止终端泄漏）。"""
     yaml_obj = _config.new_yaml()
     buf = io.StringIO()
-    yaml_obj.dump({"webhook": webhook}, buf)
+    yaml_obj.dump({"webhook": _redact_secret(webhook)}, buf)
     print(buf.getvalue())
 
 
