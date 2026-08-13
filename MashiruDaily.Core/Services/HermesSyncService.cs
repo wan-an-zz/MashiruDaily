@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using MashiruDaily.Core.Abstracts;
+using MashiruDaily.Core.Converters;
 using MashiruDaily.Core.Models;
 using Microsoft.Extensions.Logging;
 
@@ -54,6 +55,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
     private static readonly JsonSerializerOptions CamelCaseJson = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new LocalDateTimeJsonConverter() },
     };
 
     private readonly ITodoService _todoService;
