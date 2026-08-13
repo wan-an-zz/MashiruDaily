@@ -77,12 +77,18 @@ def forward_slashes(p) -> str:
 
 
 def find_hermes_exe():
-    """定位 hermes 可执行文件：
-    1. <HERMES_HOME>\\hermes-agent\\venv\\Scripts\\hermes.exe（HERMES_HOME 可用环境变量覆盖）；
+    """定位 hermes 可执行文件（跨平台）：
+    1. <HERMES_HOME>\\hermes-agent\\venv\\Scripts\\hermes.exe（Windows）或
+       <HERMES_HOME>/hermes-agent/venv/bin/hermes（Linux/macOS，HERMES_HOME 可用环境变量覆盖）；
     2. PATH 上的 hermes 命令。
     返回可执行文件路径；均未找到时返回 None。
     """
-    candidate = get_hermes_home() / "hermes-agent" / "venv" / "Scripts" / "hermes.exe"
+    venv_dir = get_hermes_home() / "hermes-agent" / "venv"
+    candidate = (
+        venv_dir / "Scripts" / "hermes.exe"
+        if os.name == "nt"
+        else venv_dir / "bin" / "hermes"
+    )
     if candidate.is_file():
         return str(candidate)
     which = shutil.which("hermes")

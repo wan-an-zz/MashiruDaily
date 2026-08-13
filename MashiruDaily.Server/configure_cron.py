@@ -43,7 +43,7 @@ def main() -> int:
     hermes = _config.find_hermes_exe()
     if hermes is None:
         print("错误：找不到 hermes 可执行文件。", file=sys.stderr)
-        print("请确认已安装 Hermes Agent（%LOCALAPPDATA%\\hermes\\hermes-agent\\venv\\Scripts\\hermes.exe），", file=sys.stderr)
+        print("请确认已安装 Hermes Agent（HERMES_HOME/hermes-agent/venv 下，Windows 为 Scripts/hermes.exe，Linux/macOS 为 bin/hermes），", file=sys.stderr)
         print("或将其加入 PATH，或设置 HERMES_HOME 环境变量。", file=sys.stderr)
         return 1
 
@@ -60,7 +60,10 @@ def main() -> int:
     list_output = (result.stdout or "") + (result.stderr or "")
     if list_output.strip():
         print(list_output.strip())
-    if re.search(rf"\b{re.escape(args.name)}\b", list_output):
+    # 幂等检查：要求任务名前后是空白或行界（而非任意非单词字符），
+    # 否则 mashiru-daily-backup 之类同名前缀任务会被误判为已存在。
+    name_pattern = re.compile(rf"(^|\s){re.escape(args.name)}(\s|$)")
+    if any(name_pattern.search(line) for line in list_output.splitlines()):
         print(f"[SKIP] cron 任务 {args.name} 已存在，跳过。")
         return 0
 
