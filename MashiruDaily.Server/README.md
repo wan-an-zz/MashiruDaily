@@ -111,9 +111,18 @@ $env:MASHIRU_WEBHOOK_SECRET = "<密钥>"
 .venv\Scripts\python.exe configure_cron.py --schedule "0 9 * * *"
 ```
 
-**install_autostart.py**：注册**物理开机自启**（系统启动即运行、不依赖登录；幂等）。Windows 用 `schtasks /SC ONSTART /RU SYSTEM`（系统启动即触发、SYSTEM 账户无需登录免密码），**需要管理员权限**——脚本非管理员时自动弹 UAC 提权重启自身，`--dry-run` 可先演练；Linux/macOS 优先 **systemd 系统服务**（`/etc/systemd/system/mashirudaily-server.service`，`WantedBy=multi-user.target`，物理开机自启 + 崩溃自动重启 + 网络就绪后启动），**需要 root/sudo**——脚本非 root 时自动加 sudo 前缀；无 systemd 时回退 **crontab `@reboot`**（cron 守护进程开机即执行，无需登录、**免 sudo**，但无崩溃自动重启与依赖排序）。四个参数互斥，`--dry-run` 只打印将执行的命令：
+**install_autostart.py**：注册**物理开机自启**（系统启动即运行、不依赖登录；幂等）。Windows 用 `schtasks /SC ONSTART /RU SYSTEM`（系统启动即触发、SYSTEM 账户无需登录免密码）；Linux/macOS 优先 **systemd 系统服务**（`/etc/systemd/system/mashirudaily-server.service`，`WantedBy=multi-user.target`，物理开机自启 + 崩溃自动重启 + 网络就绪后启动）；无 systemd 时回退 **crontab `@reboot`**（cron 守护进程开机即执行，无需登录、**免 sudo**，但无崩溃自动重启与依赖排序）。四个参数互斥，`--dry-run` 只打印将执行的命令：
+
+> ⚠️ **权限要求（务必注意）**
+>
+> - **Linux：必须 sudo。** 写 `/etc/systemd/system` 单元文件、`systemctl enable/disable` 都是系统级操作。脚本在**非 root** 下运行时会自动给每个命令加 `sudo` 前缀（会提示输入密码）；也可直接以 `sudo .venv/bin/python install_autostart.py` 运行。当前用户无 sudo 权限时脚本拒绝执行并提示改用 crontab。
+> - **Windows：必须管理员。** `schtasks /SC ONSTART /RU SYSTEM` 需要提权；脚本在非管理员下运行会自动弹 UAC 提权重启自身。
+> - 唯一的免 sudo/免管理员替代是 crontab `@reboot`（仅当 Linux 无 systemd 时自动回退，或手动改用）。
+>
+> 注意区分：注册表 `HKCU\...\Run` 与 systemd **用户**服务（`systemctl --user`）都是**登录后**启动，不满足物理开机需求，故本脚本不采用。
 
 ```powershell
+# Windows（非管理员时自动弹 UAC 提权）
 .venv\Scripts\python.exe install_autostart.py              # 注册物理开机自启
 .venv\Scripts\python.exe install_autostart.py --disable    # 临时禁用（不删除）
 .venv\Scripts\python.exe install_autostart.py --enable     # 重新启用
@@ -121,7 +130,14 @@ $env:MASHIRU_WEBHOOK_SECRET = "<密钥>"
 .venv\Scripts\python.exe install_autostart.py --dry-run    # 演练：只打印命令不执行
 ```
 
-> 说明：物理开机启动属于系统级能力，OS 安全模型要求管理员/sudo（Windows 的 ONSTART 触发器、Linux 写 `/etc/systemd/system`）。免提权的唯一轻量替代是 crontab `@reboot`。注意区分：注册表 `HKCU\...\Run` 与 systemd **用户**服务（`systemctl --user`）都是**登录后**启动，不满足物理开机需求，故本脚本不采用。
+```bash
+# Linux（需 sudo；非 root 运行会自动加 sudo 前缀）
+sudo .venv/bin/python install_autostart.py                 # 注册物理开机自启
+sudo .venv/bin/python install_autostart.py --disable       # 临时禁用（不删除）
+sudo .venv/bin/python install_autostart.py --enable        # 重新启用
+sudo .venv/bin/python install_autostart.py --uninstall     # 删除自启
+.venv/bin/python install_autostart.py --dry-run            # 演练：只打印命令不执行（无需 sudo）
+```
 
 ## 6. createdAt 语义（重要）
 
