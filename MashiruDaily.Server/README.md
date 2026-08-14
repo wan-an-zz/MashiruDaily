@@ -33,11 +33,37 @@ MashiruDaily.Server/
 ├── configure_webhook.py     配置 Hermes webhook 平台与 todo-sync 路由（幂等，需密钥）
 ├── configure_cron.py        创建每日 Hermes cron 任务 mashiru-daily（幂等）
 ├── install_autostart.py     物理开机自启（Windows: schtasks ONSTART；Linux/macOS: systemd 系统服务/crontab）
+├── bootstrap.py             一键初始化：串联全部开始流程（推荐入口）
 ├── _config.py               共享工具：定位 hermes、备份 config.yaml、round-trip 读写
 └── requirements.txt         fastapi / uvicorn / ruamel.yaml / pytest / httpx
 ```
 
 ## 3. 快速开始
+
+**一键初始化（推荐）**：`bootstrap.py` 一条命令按序串联全部开始流程：setup_server → register_skills → configure_webhook → configure_cron → install_autostart → 启动验证。任一环节失败立即停止（fail-fast）；各子脚本均幂等，可重复运行。用系统 Python 运行，纯标准库，无第三方依赖（与 `setup_server.py` 同款）：
+
+```powershell
+python bootstrap.py --secret <密钥>
+```
+
+密钥经环境变量注入各子脚本，不会显示在命令行回显中；也可改用环境变量 `MASHIRU_WEBHOOK_SECRET` 提供。
+
+可选参数：
+
+| 参数 | 说明 |
+|---|---|
+| `--venv <目录名>` | 虚拟环境名，默认 `.venv` |
+| `--secret <密钥>` | webhook 密钥；也可用环境变量 `MASHIRU_WEBHOOK_SECRET` |
+| `--skip-setup` / `--skip-skills` / `--skip-webhook` / `--skip-cron` / `--skip-autostart` | 跳过对应步骤 |
+| `--no-verify` | 跳过末尾的启动验证 |
+| `--no-restart` | 透传 configure_webhook（不自动重启网关） |
+| `--schedule <表达式>` | 透传 configure_cron，默认 `0 9 * * *` |
+| `--dry-run` | 演练：只打印将执行的命令，不实际执行 |
+
+> ⚠️ **注意事项**
+>
+> - **install_autostart 步骤**：Windows 会弹 UAC 提权，Linux 需要 sudo（详见第 5 节）。
+> - **末尾验证步骤**：会短暂启动服务器，请求 `/health` 与 `/api/todo/meta` 后自动关闭。
 
 **第一步：初始化**（前置条件：已装 Python 3 与本机 Hermes Agent。用系统 Python 运行，脚本只用标准库，无第三方依赖）：
 
