@@ -23,6 +23,15 @@ import _config  # 本目录共享的 Hermes 配置工具
 # webhook 监听端口（与 Hermes 官方文档/网关实现保持一致）
 WEBHOOK_PORT = 8644
 
+# 良性降级信号：Hermes 源码（NousResearch/hermes-agent hermes_cli/gateway.py
+# _system_service_identity）在以 root 运行且网关为 systemd 系统服务时，拒绝刷新
+# systemd 单元并抛未捕获的 ValueError（裸 traceback 进 stderr，退出码 1）；root 下
+# 用户级 D-Bus 不可达时由 print_error 输出（写 stdout）。两者都是 config.yaml 已
+# 成功写入、仅重启动作受限的场景，应降级为提示而非失败。注意两个信号可能落在
+# 不同输出流，匹配时必须合并 stdout 与 stderr。
+_ROOT_REFUSAL_SIGNAL = "Refusing to install the gateway system service as root"
+_USER_SYSTEMD_UNAVAILABLE_SIGNAL = "User systemd not reachable"
+
 # todo-sync 路由订阅的事件
 TODO_SYNC_EVENTS = [
     "todo_added",
@@ -88,7 +97,8 @@ def _print_webhook_block(webhook) -> None:
     print(buf.getvalue())
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    """解析参数并按序执行：校验密钥 → 合并 webhook 配置 → 写回校验 → 重启网关。"""
     parser = argparse.ArgumentParser(
         description="配置 Hermes 的 webhook 平台与 todo-sync 路由（幂等，需提供密钥）"
     )
@@ -101,7 +111,7 @@ def main() -> int:
         action="store_true",
         help="修改成功后不执行 hermes gateway restart，仅打印命令",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
     # 密钥来源：--secret 参数优先，其次环境变量；两者皆无则拒绝运行
     secret = (args.secret or os.environ.get("MASHIRU_WEBHOOK_SECRET") or "").strip()
@@ -199,18 +209,51 @@ def main() -> int:
         print("\n错误：找不到 hermes 可执行文件，无法自动重启网关。", file=sys.stderr)
         print("请手动执行：hermes gateway restart", file=sys.stderr)
         return 1
+    return _restart_gateway(hermes)
+
+
+def _restart_gateway(hermes: str) -> int:
+    """执行 hermes gateway restart；遇 Hermes 的良性拒绝场景时降级为提示并返回 0。
+
+    返回 0 的降级场景（config.yaml 已写入成功，仅重启未执行）：
+    - root 下 Hermes 拒绝刷新 systemd 系统服务单元（_system_service_identity 抛
+      ValueError，裸 traceback 进 stderr）；
+    - root 下用户级 systemd D-Bus 不可达（"User systemd not reachable" 进 stdout）。
+    其余失败（超时 / 无关错误）保持返回 1，不掩盖真实问题。
+    """
     print("\n正在重启 Hermes 网关（webhook 连接将短暂断开）...")
     try:
         result = _config.run_command([hermes, "gateway", "restart"], timeout=120)
     except TimeoutError:  # subprocess.TimeoutExpired 是 TimeoutError 的子类
         print("错误：网关重启超时。", file=sys.stderr)
         return 1
-    if result.returncode != 0:
-        print("警告：网关重启命令返回非零退出码。", file=sys.stderr)
-        print(result.stderr.strip() or result.stdout.strip(), file=sys.stderr)
-        return 1
-    print("[OK] 网关重启成功，webhook 配置已生效。")
-    return 0
+    if result.returncode == 0:
+        print("[OK] 网关重启成功，webhook 配置已生效。")
+        return 0
+
+    # 两个信号可能落在不同输出流，必须合并匹配（Hermes 拒绝消息经未捕获
+    # ValueError 的 traceback 进 stderr；"User systemd not reachable" 由
+    # print_error 写 stdout）。
+    combined = (result.stderr or "") + (result.stdout or "")
+    if _ROOT_REFUSAL_SIGNAL in combined or _USER_SYSTEMD_UNAVAILABLE_SIGNAL in combined:
+        # 降级是成功路径（配置已写入、仅重启未执行），提示走 stdout，
+        # 与 --no-restart 分支的输出语义一致。
+        print("[WARN] Hermes 拒绝在 root 下重启网关，webhook 配置已写入 config.yaml，")
+        print("将在 Hermes 下次重启时生效。本次未执行重启；可手动重启或等待下次重启。")
+        if _ROOT_REFUSAL_SIGNAL in combined:
+            print("修复建议：从普通用户终端运行 `sudo hermes gateway restart`，")
+            print("或 `sudo systemctl restart hermes-gateway.service`。")
+        else:
+            print("修复建议：以 Hermes 所属用户执行 `hermes gateway restart`")
+            print("（无登录会话先 `sudo loginctl enable-linger <用户>`），或前台 `hermes gateway run`。")
+        if combined.strip():
+            print("\nHermes 输出：")
+            print(combined.strip())
+        return 0
+
+    print("警告：网关重启命令返回非零退出码。", file=sys.stderr)
+    print(combined.strip(), file=sys.stderr)
+    return 1
 
 
 if __name__ == "__main__":
