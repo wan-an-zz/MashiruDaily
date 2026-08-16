@@ -83,7 +83,7 @@ def test_todo_upsert_adds_and_updates(plugin_data_dir) -> None:
 
 
 def test_todo_delete_removes_by_id(plugin_data_dir) -> None:
-    """todo_delete 按 Id 删除；不存在时返回 deleted=false。"""
+    """todo_delete 按 Id 删除；不存在时返回 success=false 且 deleted=false。"""
     _invoke(tools.todo_save, items=[_item("1", "买牛奶"), _item("2", "写周报")])
 
     deleted = _invoke(tools.todo_delete, id="1")
@@ -92,7 +92,7 @@ def test_todo_delete_removes_by_id(plugin_data_dir) -> None:
     assert deleted["count"] == 1
 
     missing = _invoke(tools.todo_delete, id="不存在")
-    assert missing["success"] is True
+    assert missing["success"] is False
     assert missing["deleted"] is False
 
 
