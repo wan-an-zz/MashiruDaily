@@ -4,22 +4,9 @@
 - todo.json：PascalCase 待办数组，是服务器侧唯一数据源；
 - todo-meta.json：侧车文件，createdAt 只能由 todo_meta_stamp 工具（或等价脚本）
   刷新，webhook 驱动的修改不得触碰。
+- Id/CreatedAt/CompletedAt 由程序生成或维护，Agent 不自行编造；只有更新/完成
+  已有条目时可传入已存在的 Id 用于定位。
 """
-
-# 单条待办的 JSON Schema 描述（与 C# 端字段大小写严格一致）
-_TODO_ITEM_SCHEMA = {
-    "type": "object",
-    "description": "一条 PascalCase 待办记录：Id/Title/IsCompleted/CreatedAt/CompletedAt，禁止出现 HasSynced",
-    "properties": {
-        "Id": {"type": "string", "description": "GUID 字符串，客户端主键"},
-        "Title": {"type": "string", "description": "待办标题"},
-        "IsCompleted": {"type": "boolean", "description": "是否已完成"},
-        "CreatedAt": {"type": "string", "description": "ISO 8601 创建时间（带时区）"},
-        "CompletedAt": {"type": ["string", "null"], "description": "ISO 8601 完成时间，未完成时为 null"},
-    },
-    "required": ["Id", "Title", "IsCompleted", "CreatedAt", "CompletedAt"],
-    "additionalProperties": False,
-}
 
 TODO_LIST = {
     "name": "todo_list",
@@ -44,29 +31,49 @@ TODO_GET = {
 
 TODO_SAVE = {
     "name": "todo_save",
-    "description": "整体覆盖写入 data/todo.json。传入完整待办数组；用于全量替换，日常增删改用 todo_upsert / todo_delete。",
+    "description": "整体覆盖写入 data/todo.json。只接收 Title 数组，Id/CreatedAt/CompletedAt/IsCompleted 由程序自动生成；用于全量替换。",
     "parameters": {
         "type": "object",
         "properties": {
             "items": {
                 "type": "array",
-                "description": "完整的 PascalCase 待办数组，不得包含 HasSynced",
-                "items": _TODO_ITEM_SCHEMA,
+                "description": "待办标题数组，仅传标题",
+                "items": {"type": "string"},
             },
         },
         "required": ["items"],
+        "additionalProperties": False,
     },
 }
 
 TODO_UPSERT = {
     "name": "todo_upsert",
-    "description": "按 Id 对 data/todo.json 做 upsert：Id 已存在则更新该条，不存在则新增。payload 必须为完整条目快照。",
+    "description": "按 Id 更新已有待办的标题；未传 Id 或 Id 为空时新增一条待办。",
     "parameters": {
         "type": "object",
         "properties": {
-            "item": _TODO_ITEM_SCHEMA,
+            "title": {"type": "string", "description": "待办标题"},
+            "id": {
+                "type": "string",
+                "description": "已存在待办的 Id（GUID）；省略或为空时表示新增",
+            },
         },
-        "required": ["item"],
+        "required": ["title"],
+        "additionalProperties": False,
+    },
+}
+
+TODO_COMPLETED = {
+    "name": "todo_completed",
+    "description": "修改已有待办的完成状态。接收已存在的 Id（GUID）和 completed 布尔值；CompletedAt 由程序自动生成或清空。",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "id": {"type": "string", "description": "已存在待办的 Id（GUID）"},
+            "completed": {"type": "boolean", "description": "是否已完成"},
+        },
+        "required": ["id", "completed"],
+        "additionalProperties": False,
     },
 }
 
@@ -106,6 +113,7 @@ TOOLS = {
     TODO_GET["name"]: TODO_GET,
     TODO_SAVE["name"]: TODO_SAVE,
     TODO_UPSERT["name"]: TODO_UPSERT,
+    TODO_COMPLETED["name"]: TODO_COMPLETED,
     TODO_DELETE["name"]: TODO_DELETE,
     TODO_META_GET["name"]: TODO_META_GET,
     TODO_META_STAMP["name"]: TODO_META_STAMP,

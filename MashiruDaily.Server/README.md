@@ -1,6 +1,6 @@
 # MashiruDaily.Server 运维手册
 
-> 本文档是 MashiruDaily.Server（Python 后端）的运维手册。仓库采取测试先行（TDD）开发：先写契约测试（RED），再实现 `app/main.py` 转绿。当前 `pytest MashiruDaily.Server/tests -v` 7 个用例全部通过。
+> 本文档是 MashiruDaily.Server（Python 后端）的运维手册。仓库采取测试先行（TDD）开发：先写契约测试（RED），再实现 `app/main.py` 转绿。当前 `pytest MashiruDaily.Server/tests -v` 全部通过。
 
 ## 1. 项目概览
 
@@ -223,7 +223,7 @@ sudo .venv/bin/python install_autostart.py --uninstall     # 删除自启
 pytest MashiruDaily.Server/tests -v
 ```
 
-覆盖：meta 结构合法、`GET /api/todo` 逐字回显 PascalCase 且无 `HasSynced`、空目录返回空数组、首次请求自动建侧车、非法 JSON 返回 500、webhook 式编辑不改 createdAt 而 stamp 会改、count 实时反映条数，以及 `hermes_plugin` 的 `todo_*` 工具读写/upsert/delete/stamp 行为。已全部通过。
+覆盖：meta 结构合法、`GET /api/todo` 逐字回显 PascalCase 且无 `HasSynced`、空目录返回空数组、首次请求自动建侧车、非法 JSON 返回 500、webhook 式编辑不改 createdAt 而 stamp 会改、count 实时反映条数，以及 `hermes_plugin` 的 `todo_*` 工具读写/upsert/completed/delete/stamp 行为。已全部通过。
 
 另可运行 `tools/test_webhook_signed.py` 做端到端冒烟：向 Hermes 网关 `:8644/webhooks/todo-sync` 发送签名事件（`--secret` 必填），2xx 即成功；`--negative` 用错误密钥验证网关返回 401。
 

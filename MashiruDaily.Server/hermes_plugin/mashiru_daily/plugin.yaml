@@ -8,6 +8,7 @@ provides_tools:
   - todo_get
   - todo_save
   - todo_upsert
+  - todo_completed
   - todo_delete
   - todo_meta_get
   - todo_meta_stamp

@@ -1,7 +1,7 @@
 ---
 name: mashiru-todo
 description: "维护 MashiruDaily 服务器端的 todo.json 与 plan.md（每日更新与 Webhook 事件处理，全部通过 todo_* 工具完成）"
-version: 1.1.0
+version: 1.2.0
 author: MashiruDaily
 license: MIT
 platforms: [windows, linux, macos]
@@ -20,7 +20,7 @@ metadata:
 在以下场景激活本技能：
 
 - **每日 cron 提醒**：每日定时任务调用本技能，用于刷新当日规划并更新 `todo.json`。
-- **Webhook 事件**：服务器收到 `todo_*` 事件（`todo_updated` / `todo_deleted`）时，按事件类型对 `data/todo.json` 执行对应变更。
+- **Webhook 事件**：服务器收到 `todo_*` 事件（`todo_added` / `todo_updated` / `todo_completed` / `todo_reopened` / `todo_deleted`）时，按事件类型对 `data/todo.json` 执行对应变更。
 - **用户直接请求**：用户要求增删改待办、查看计划或整理当天安排。
 
 如果当前没有任何可做的变更（例如事件与现有数据一致、或今日规划已是最新），直接回复 `[SILENT]`，不要产生无意义的写入。
@@ -33,8 +33,9 @@ metadata:
 | --- | --- |
 | `todo_list` | 读取 `data/todo.json` 全量列表 |
 | `todo_get` | 按 `Id` 读取单条待办 |
-| `todo_save` | 整体覆盖写入 `data/todo.json`（全量替换） |
-| `todo_upsert` | 按 `Id` upsert：存在则更新，不存在则新增 |
+| `todo_save` | 整体覆盖写入 `data/todo.json`；只接收 Title 数组，`Id`/`CreatedAt`/`CompletedAt` 由程序生成 |
+| `todo_upsert` | 未传 `Id` 时新增待办；传入已存在 `Id` 时更新该条标题 |
+| `todo_completed` | 按 `Id` 修改完成状态；接收 `id` 与 `completed` 布尔，`CompletedAt` 由程序维护 |
 | `todo_delete` | 按 `Id` 删除待办 |
 | `todo_meta_get` | 读取 `data/todo-meta.json` 元数据（缺失时初始化） |
 | `todo_meta_stamp` | 刷新 `data/todo-meta.json` 的 `date` / `createdAt` / `count` |
@@ -47,11 +48,11 @@ PascalCase JSON 数组，元素字段如下：
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `Id` | string | GUID 字符串，客户端主键，全局唯一 |
+| `Id` | string | GUID 字符串，客户端主键，全局唯一；由程序生成，Agent 不要编造 |
 | `Title` | string | 待办标题 |
 | `IsCompleted` | bool | 是否已完成 |
-| `CreatedAt` | string | ISO 8601 时间戳（带时区偏移） |
-| `CompletedAt` | string \| null | 完成时间，未完成时为 `null` |
+| `CreatedAt` | string | ISO 8601 时间戳（带时区偏移）；由程序生成，Agent 不要编造 |
+| `CompletedAt` | string \| null | 完成时间，未完成时为 `null`；由程序维护，Agent 不要编造 |
 
 完整示例：
 
@@ -77,10 +78,13 @@ PascalCase JSON 数组，元素字段如下：
 
 1. 调用 `todo_list` 与 `todo_meta_get`（以及按需读取 `data/plan.md`），掌握当前数据状态。
 2. **按事件或日期更新**：
-   - `todo_updated`：调用 `todo_upsert`。按 `Id` 查找，存在则更新该条目（`Title` / `IsCompleted` / `CompletedAt`），不存在则用 payload 创建新条目。
+   - `todo_added`：调用 `todo_upsert`，只传 `title`（不传 `id`），由程序生成 `Id`/`CreatedAt`。
+   - `todo_updated`：调用 `todo_upsert`。若 `Id` 已存在，传入 `id` + `title` 更新标题；若服务器上不存在该 `Id`，只传 `title` 新增（程序会生成新 `Id`）。
+   - `todo_completed`：调用 `todo_completed`，传 `id` + `completed=true`。
+   - `todo_reopened`：调用 `todo_completed`，传 `id` + `completed=false`。
    - `todo_deleted`：调用 `todo_delete` 按 `Id` 删除对应条目。
-   - 每日更新：为今日新增/调整待办，刷新 `plan.md` 的当日小节。
-3. **维护今日日期字段**：确保 `CreatedAt` / `CompletedAt` 使用 ISO 8601 且带时区，日期与今日一致。
+   - 每日更新：可用 `todo_save` 传入当日 Title 数组整体重建，也可用 `todo_upsert` / `todo_completed` / `todo_delete` 做增量修正。
+3. **维护今日日期字段**：`CreatedAt` / `CompletedAt` 统一由程序生成或维护，Agent 不要自行填写；只需保证业务字段正确。
 4. **每日例行维护结束时调用 `todo_meta_stamp`**，刷新 `data/todo-meta.json` 的 `createdAt` 与 `count`。webhook 驱动的小改动**不要**调用本工具。
 5. **无事可做时**回复 `[SILENT]`。
 
@@ -88,6 +92,7 @@ PascalCase JSON 数组，元素字段如下：
 
 - **绝不直接修改 `data/todo-meta.json`**：它只能由 `todo_meta_stamp` 工具生成。手工改动会破坏协议：客户端比较 `createdAt` 与本地 `LastSyncedAt`，元数据变了客户端就会在每次 webhook 同步后重复整表拉取，造成回声与死循环。
 - **webhook 驱动的小改动不要调用 `todo_meta_stamp`**：`createdAt` 只在每日 cron 重新生成 `todo.json` 时自然变化，webhook 编辑应保持原条目的 `CreatedAt` 不变。
+- **`Id`/`CreatedAt`/`CompletedAt` 由程序生成或维护**：新增时不要传 `Id`；只有更新/完成已有条目时才可传已存在的 `Id` 用于定位，绝不自行编造 GUID 或时间戳。
 - **绝不传输 `HasSynced`**：该字段是客户端本地标记，出现在任何事件 payload 中都会导致协议违规。
 - **保持 PascalCase 字段名精确**：客户端用 System.Text.Json 反序列化，**大小写敏感**，`Id` 写成 `id`、`CreatedAt` 写成 `createdAt` 都会导致字段丢失。
 - **保持 JSON 合法**：所有写入都走 `todo_*` 工具，工具内部使用原子写并校验结构；非法 JSON 会让整个 `GET /api/todo` 接口 500，影响所有客户端。

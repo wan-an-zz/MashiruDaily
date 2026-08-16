@@ -6,15 +6,15 @@
 - 落盘沿用原子写（tmp + os.replace），避免半截文件；
 - 与 app/todo_store.py 的语义保持一致：todo-meta.json 的 createdAt 只能由
   todo_meta_stamp 刷新。
+- Id/CreatedAt/CompletedAt 统一由程序生成或维护，Hermes Agent 不自行编造；
+  只有更新/完成已有条目时可传入已存在的 Id 用于定位。
 """
 
 import json
 import os
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-
-# 单条待办必须包含的 PascalCase 字段
-_REQUIRED_ITEM_KEYS = {"Id", "Title", "IsCompleted", "CreatedAt", "CompletedAt"}
 
 
 def _server_root() -> Path:
@@ -74,19 +74,15 @@ def _load_todo_list() -> list:
     return data
 
 
-def _validate_item(item) -> None:
-    """校验单条待办：必须为对象、包含全部 PascalCase 必填字段、禁止 HasSynced。"""
-    if not isinstance(item, dict):
-        raise ValueError("item 必须是 JSON 对象")
-    if "HasSynced" in item:
-        raise ValueError("待办记录禁止包含 HasSynced（客户端本地字段）")
-    missing = _REQUIRED_ITEM_KEYS - set(item.keys())
-    if missing:
-        raise ValueError(f"待办记录缺少字段：{sorted(missing)}")
-    if not isinstance(item.get("Title"), str) or not item["Title"]:
-        raise ValueError("Title 必须是非空字符串")
-    if not isinstance(item.get("IsCompleted"), bool):
-        raise ValueError("IsCompleted 必须是布尔值")
+def _new_item(title: str) -> dict:
+    """根据标题生成一条完整待办：Id/CreatedAt 由程序生成，CompletedAt 初始为 null。"""
+    return {
+        "Id": str(uuid.uuid4()),
+        "Title": title,
+        "IsCompleted": False,
+        "CreatedAt": _now_utc_iso(),
+        "CompletedAt": None,
+    }
 
 
 def _load_or_init_meta() -> dict:
@@ -163,13 +159,18 @@ def todo_get(args: dict, **kwargs) -> str:
 
 
 def todo_save(args: dict, **kwargs) -> str:
-    """整体覆盖写入 data/todo.json。"""
+    """整体覆盖写入 data/todo.json，只接收 Title 数组，其余字段由程序生成。"""
     try:
-        items = args.get("items")
-        if not isinstance(items, list):
+        titles = args.get("items")
+        if titles is None:
+            titles = args.get("titles")
+        if not isinstance(titles, list):
             return _err("参数 items 必须是数组")
-        for item in items:
-            _validate_item(item)
+        items = []
+        for title in titles:
+            if not isinstance(title, str) or not title.strip():
+                return _err("Title 必须是非空字符串")
+            items.append(_new_item(title))
         _atomic_write_json(_todo_path(), items)
         return _ok({"success": True, "count": len(items)})
     except Exception as exc:
@@ -177,22 +178,45 @@ def todo_save(args: dict, **kwargs) -> str:
 
 
 def todo_upsert(args: dict, **kwargs) -> str:
-    """按 Id upsert：存在则更新，不存在则新增。"""
+    """按 Id 更新已有待办标题；未传 Id 或 Id 为空时新增待办。"""
     try:
-        item = args.get("item")
-        _validate_item(item)
+        title = args.get("title")
+        if not isinstance(title, str) or not title.strip():
+            return _err("参数 title 必须是非空字符串")
+        item_id = str(args.get("id") or "").strip()
         items = _load_todo_list()
-        item_id = item["Id"]
-        created = True
-        for index, existing in enumerate(items):
-            if existing.get("Id") == item_id:
-                items[index] = item
-                created = False
-                break
-        else:
-            items.append(item)
+        if item_id:
+            for index, existing in enumerate(items):
+                if existing.get("Id") == item_id:
+                    items[index] = {**existing, "Title": title}
+                    _atomic_write_json(_todo_path(), items)
+                    return _ok({"success": True, "created": False, "item": items[index], "count": len(items)})
+            return _ok({"success": False, "found": False, "id": item_id})
+        item = _new_item(title)
+        items.append(item)
         _atomic_write_json(_todo_path(), items)
-        return _ok({"success": True, "created": created, "item": item, "count": len(items)})
+        return _ok({"success": True, "created": True, "item": item, "count": len(items)})
+    except Exception as exc:
+        return _err(exc)
+
+
+def todo_completed(args: dict, **kwargs) -> str:
+    """按 Id 修改待办完成状态；CompletedAt 由程序生成或清空。"""
+    try:
+        item_id = str(args.get("id") or "")
+        if not item_id:
+            return _err("缺少参数 id")
+        completed = args.get("completed")
+        if not isinstance(completed, bool):
+            return _err("参数 completed 必须是布尔值")
+        items = _load_todo_list()
+        for item in items:
+            if item.get("Id") == item_id:
+                item["IsCompleted"] = completed
+                item["CompletedAt"] = _now_utc_iso() if completed else None
+                _atomic_write_json(_todo_path(), items)
+                return _ok({"success": True, "item": item, "count": len(items)})
+        return _ok({"success": False, "found": False, "id": item_id})
     except Exception as exc:
         return _err(exc)
 
