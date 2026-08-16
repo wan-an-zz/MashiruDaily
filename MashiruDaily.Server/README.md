@@ -31,9 +31,7 @@ MashiruDaily.Server/
 │       └── skills/
 │           └── mashiru-todo/ 插件内置 skill（SKILL.md），指导 Hermes 使用 todo_* 工具
 ├── tools/
-│   ├── stamp_todo_meta.py   每日戳记脚本，等价于 todo_meta_stamp 工具
 │   └── test_webhook_signed.py  签名 webhook 冒烟测试（模拟客户端推送，含 --negative 负例）
-├── skills/                  （旧目录，已迁移至 hermes_plugin/mashiru_daily/skills，保留仅为兼容）
 ├── tests/
 │   ├── test_api.py          GET 端点契约的 pytest 集成测试（离线）
 │   ├── test_hermes_plugin.py  hermes_plugin todo_* 工具离线测试
@@ -81,7 +79,7 @@ python bootstrap.py --secret <密钥>
 python setup_server.py
 ```
 
-脚本依次完成四件事：创建虚拟环境 `.venv`（已存在则跳过）、用 `.venv` 的 pip 安装 `requirements.txt`、创建 `data/`、运行 `tools/stamp_todo_meta.py` 生成初始侧车。可加 `--venv <目录名>` 自定义虚拟环境名。幂等可重复运行，若检测到已在虚拟环境中会给出警告。
+脚本依次完成四件事：创建虚拟环境 `.venv`（已存在则跳过）、用 `.venv` 的 pip 安装 `requirements.txt`、创建 `data/`、调用 `todo_meta_stamp` 生成初始侧车。可加 `--venv <目录名>` 自定义虚拟环境名。幂等可重复运行，若检测到已在虚拟环境中会给出警告。
 
 **第二步：启动拉取服务器**：
 
@@ -179,7 +177,7 @@ sudo .venv/bin/python install_autostart.py --uninstall     # 删除自启
 
 `todo-meta.json` 的 `createdAt` 是客户端判定「是否需要拉取」的主字段（协议 5.1、5.3）：
 
-- `createdAt` **只在 `tools/stamp_todo_meta.py` 或 Hermes 插件工具 `todo_meta_stamp` 运行时改变**。运行时机仅两处：`setup_server.py` 首次引导，以及每日 cron agent 每次运行结束时（configure_cron.py 的提示词已内建该步骤）。
+- `createdAt` **只在 Hermes 插件工具 `todo_meta_stamp` 运行时改变**。运行时机仅两处：`setup_server.py` 首次引导，以及每日 cron agent 每次运行结束时（configure_cron.py 的提示词已内建该步骤）。
 - **webhook 驱动的 `todo.json` 修改绝不改变 `createdAt`**。Hermes 收到 webhook 后应使用 `todo_*` 工具更新 `todo.json`，但**禁止调用 `todo_meta_stamp`**，也不要直接编辑侧车。否则客户端每次 webhook 同步后都会因时间戳更新而误判「需要拉取」，造成无谓的全量拉取。
 - `count` 始终是实时值：`GET /api/todo/meta` 返回前取 `len(todo.json)`，侧车里的旧 count 不参与。
 

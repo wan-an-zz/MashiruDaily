@@ -86,7 +86,7 @@ PascalCase JSON 数组，元素字段如下：
 
 ## Pitfalls (陷阱)
 
-- **绝不直接修改 `data/todo-meta.json`**：它只能由 `todo_meta_stamp` 工具（或等价的 `tools/stamp_todo_meta.py`）生成。手工改动会破坏协议：客户端比较 `createdAt` 与本地 `LastSyncedAt`，元数据变了客户端就会在每次 webhook 同步后重复整表拉取，造成回声与死循环。
+- **绝不直接修改 `data/todo-meta.json`**：它只能由 `todo_meta_stamp` 工具生成。手工改动会破坏协议：客户端比较 `createdAt` 与本地 `LastSyncedAt`，元数据变了客户端就会在每次 webhook 同步后重复整表拉取，造成回声与死循环。
 - **webhook 驱动的小改动不要调用 `todo_meta_stamp`**：`createdAt` 只在每日 cron 重新生成 `todo.json` 时自然变化，webhook 编辑应保持原条目的 `CreatedAt` 不变。
 - **绝不传输 `HasSynced`**：该字段是客户端本地标记，出现在任何事件 payload 中都会导致协议违规。
 - **保持 PascalCase 字段名精确**：客户端用 System.Text.Json 反序列化，**大小写敏感**，`Id` 写成 `id`、`CreatedAt` 写成 `createdAt` 都会导致字段丢失。

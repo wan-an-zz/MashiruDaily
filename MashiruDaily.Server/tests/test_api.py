@@ -8,7 +8,6 @@
 import json
 import os
 import re
-import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -16,7 +15,7 @@ from typing import TypedDict
 
 import pytest
 
-# Server 根目录：用于定位 tools/stamp_todo_meta.py（用例 f 的子进程调用）
+# Server 根目录：用于在用例内导入 hermes_plugin 的 todo_meta_stamp
 SERVER_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -196,7 +195,7 @@ def test_meta_sidecar_non_object_returns_json_500(client, data_dir) -> None:
 
 
 def test_created_at_survives_webhook_edit_but_stamp_changes_it(client, data_dir) -> None:
-    """webhook 式编辑后 createdAt 不变（count 增加）；stamp_todo_meta.py 运行后 createdAt 改变。"""
+    """webhook 式编辑后 createdAt 不变（count 增加）；todo_meta_stamp 运行后 createdAt 改变。"""
     # Given: 初始 todo.json 与侧车
     _atomic_write(
         data_dir / "todo.json",
@@ -216,16 +215,13 @@ def test_created_at_survives_webhook_edit_but_stamp_changes_it(client, data_dir)
     assert meta_after_edit["createdAt"] == created_before
     assert meta_after_edit["count"] == meta_before["count"] + 1
 
-    # When: 以子进程运行 stamp_todo_meta.py（携带 MASHIRU_DATA_DIR）
-    stamp_script = SERVER_ROOT / "tools" / "stamp_todo_meta.py"
-    subprocess.run(
-        [sys.executable, str(stamp_script)],
-        cwd=SERVER_ROOT,
-        env={**os.environ, "MASHIRU_DATA_DIR": str(data_dir)},
-        capture_output=True,
-        timeout=60,
-        check=True,
-    )
+    # When: 调用插件工具 todo_meta_stamp（MASHIRU_DATA_DIR 已由 fixture 指向临时目录）
+    if str(SERVER_ROOT) not in sys.path:
+        sys.path.insert(0, str(SERVER_ROOT))
+    from hermes_plugin.mashiru_daily.tools import todo_meta_stamp
+
+    stamp_result = json.loads(todo_meta_stamp({}))
+    assert stamp_result["success"] is True
 
     # Then: createdAt 已改变且为合法 UTC，date 为今日，count 匹配实时条数
     meta_after_stamp = client.get("/api/todo/meta").json()

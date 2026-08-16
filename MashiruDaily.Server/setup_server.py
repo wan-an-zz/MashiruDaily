@@ -4,12 +4,13 @@
 1. 创建虚拟环境 .venv（已存在则跳过）；
 2. 用 .venv 的 pip 安装 requirements.txt；
 3. 创建 data/ 数据目录；
-4. 运行 tools/stamp_todo_meta.py 生成/刷新初始 sidecar（每次显式运行都会刷新 createdAt，属预期行为）。
+4. 调用 hermes_plugin 的 todo_meta_stamp 生成/刷新初始 sidecar（每次显式运行都会刷新 createdAt，属预期行为）。
 
-仅依赖标准库：venv / subprocess / pathlib / argparse / os / sys。
+仅依赖标准库：venv / subprocess / pathlib / argparse / os / sys / json。
 """
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -86,24 +87,20 @@ def main() -> int:
     print(f"[OK] 数据目录就绪：{data_dir}")
 
     # 步骤 4：盖章初始元数据（sidecar）
-    print("\n[4/4] 运行 tools/stamp_todo_meta.py 生成初始 sidecar")
-    stamp_tool = server_root / "tools" / "stamp_todo_meta.py"
-    if not stamp_tool.is_file():
-        print(f"[WARN] 未找到 {stamp_tool}，跳过盖章步骤（该工具由后续版本提供，不影响其余初始化）。")
-    else:
-        env = dict(os.environ)
-        env["MASHIRU_DATA_DIR"] = str(data_dir)
-        print(f"运行: {venv_python} {stamp_tool}（MASHIRU_DATA_DIR={data_dir}）")
-        try:
-            result = run([str(venv_python), str(stamp_tool)], timeout=120, env=env)
-        except subprocess.TimeoutExpired:
-            print("[FAIL] 盖章工具执行超时。", file=sys.stderr)
-            return 1
-        if result.returncode != 0:
-            print("[FAIL] 盖章工具执行失败。", file=sys.stderr)
-            print(result.stderr.strip() or result.stdout.strip(), file=sys.stderr)
-            return 1
-        print("[OK] 初始 sidecar 已生成。")
+    print("\n[4/4] 调用 todo_meta_stamp 生成初始 sidecar")
+    sys.path.insert(0, str(server_root))
+    os.environ["MASHIRU_DATA_DIR"] = str(data_dir)
+    try:
+        from hermes_plugin.mashiru_daily.tools import todo_meta_stamp
+
+        stamp_result = json.loads(todo_meta_stamp({}))
+    except Exception as exc:
+        print(f"[FAIL] 盖章工具执行失败：{exc}", file=sys.stderr)
+        return 1
+    if not stamp_result.get("success"):
+        print(f"[FAIL] 盖章工具执行失败：{stamp_result.get('error')}", file=sys.stderr)
+        return 1
+    print(f"[OK] 初始 sidecar 已生成（{stamp_result['meta']}）。")
 
     print("\n[完成] 初始化成功。可继续运行 register_skills.py / configure_webhook.py / configure_cron.py / install_autostart.py。")
     return 0

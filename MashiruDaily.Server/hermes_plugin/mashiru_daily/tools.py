@@ -5,7 +5,7 @@
 - 所有 handler 都返回 JSON 字符串，错误也以 JSON 返回，绝不向上抛异常；
 - 落盘沿用原子写（tmp + os.replace），避免半截文件；
 - 与 app/todo_store.py 的语义保持一致：todo-meta.json 的 createdAt 只能由
-  todo_meta_stamp（或等价脚本 tools/stamp_todo_meta.py）刷新。
+  todo_meta_stamp 刷新。
 """
 
 import json
