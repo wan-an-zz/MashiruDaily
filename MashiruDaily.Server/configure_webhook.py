@@ -2,6 +2,7 @@
 
 - 合并 platforms.webhook = {enabled, extra:{port, routes:{todo-sync:{...}}}}，
   其它平台（如 qqbot）与既有路由一律保留；
+- todo-sync 路由通过 `toolsets: ["mashiru_daily"]` 声明 Hermes 可调用的插件工具集；
 - secret 必须来自 --secret 参数或环境变量 MASHIRU_WEBHOOK_SECRET，绝不硬编码、绝不交互输入；
 - 使用 ruamel.yaml round-trip 模式，保留注释；仅在真正修改前备份；
 - 修改成功后默认执行 `hermes gateway restart`，可用 --no-restart 跳过并打印命令。
@@ -69,6 +70,7 @@ def _webhook_identical(webhook, desired: dict) -> bool:
         and str(todo_sync.get("secret") or "") == desired["secret"]
         and str(todo_sync.get("prompt") or "") == desired["prompt"]
         and list(todo_sync.get("skills") or []) == desired["skills"]
+        and list(todo_sync.get("toolsets") or []) == desired["toolsets"]
     )
 
 
@@ -127,7 +129,8 @@ def main(argv: list[str] | None = None) -> int:
         print("请确认 Hermes Agent 已安装，或设置环境变量 HERMES_HOME 指向其主目录。", file=sys.stderr)
         return 1
 
-    # 构造期望的 todo-sync 路由（prompt 引用服务器数据文件，使用 {__raw__} 模板 token）
+    # 构造期望的 todo-sync 路由（prompt 引用服务器数据文件，使用 {__raw__} 模板 token；
+    # toolsets 声明本路由允许 Hermes 调用 mashiru_daily 工具集中的 todo_* 工具）
     server_root = Path(__file__).resolve().parent
     todo_json = _config.forward_slashes(server_root / "data" / "todo.json")
     plan_md = _config.forward_slashes(server_root / "data" / "plan.md")
@@ -145,6 +148,7 @@ def main(argv: list[str] | None = None) -> int:
         "secret": secret,
         "prompt": _literal_scalar(prompt_text),
         "skills": ["mashiru-todo"],
+        "toolsets": ["mashiru_daily"],
     }
 
     data = _config.load_config(yaml_obj, config_path)

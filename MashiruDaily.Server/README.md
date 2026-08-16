@@ -126,7 +126,7 @@ curl http://localhost:8123/api/todo
 .venv\Scripts\python.exe register_skills.py
 ```
 
-**configure_webhook.py**：合并 `platforms.webhook = {enabled, extra:{port: 8644, routes:{todo-sync:{...}}}}` 到 config.yaml。其它平台（如 qqbot）与既有路由一律保留，只覆盖 todo-sync。写入后校验，默认执行 `hermes gateway restart`（webhook 变更需重启生效，网关连接会短暂断开）。不想自动重启、只打印命令时加 `--no-restart`：
+**configure_webhook.py**：合并 `platforms.webhook = {enabled, extra:{port: 8644, routes:{todo-sync:{...}}}}` 到 config.yaml。路由通过 `toolsets: ["mashiru_daily"]` 声明 Hermes 可调用的插件工具集（`todo_*` 工具）。其它平台（如 qqbot）与既有路由一律保留，只覆盖 todo-sync。写入后校验，默认执行 `hermes gateway restart`（webhook 变更需重启生效，网关连接会短暂断开）。不想自动重启、只打印命令时加 `--no-restart`：
 
 ```powershell
 .venv\Scripts\python.exe configure_webhook.py --secret <密钥>
