@@ -133,8 +133,12 @@ def main(argv: list[str] | None = None) -> int:
     plan_md = _config.forward_slashes(server_root / "data" / "plan.md")
     prompt_text = (
         f"收到 Todo 变更事件：\n{{__raw__}}\n\n"
-        f"请根据事件更新 {todo_json}（PascalCase 字段 Id/Title/IsCompleted/CreatedAt/CompletedAt，禁止传输 HasSynced）。"
-        f"必要时同步 {plan_md}。完成后无需报告。"
+        f"请使用 Hermes 插件 mashiru-daily 提供的 todo_* 工具更新 {todo_json}"
+        f"（PascalCase 字段 Id/Title/IsCompleted/CreatedAt/CompletedAt，禁止传输 HasSynced）："
+        f"todo_updated 用 todo_upsert，todo_deleted 用 todo_delete，其余事件按需使用。"
+        f"必要时同步 {plan_md}。"
+        f"这是 webhook 驱动的小改动，禁止调用 todo_meta_stamp，也不要直接编辑 todo-meta.json。"
+        f"完成后无需报告。"
     )
     desired_todo_sync = {
         "events": TODO_SYNC_EVENTS,

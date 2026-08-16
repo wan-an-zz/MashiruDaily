@@ -1,7 +1,7 @@
 """创建 Hermes 每日定时任务 mashiru-daily（幂等）。
 
 - 先执行 `hermes cron list` 检查：任务已存在则打印“已存在，跳过”并以 0 退出；
-- 否则执行 `hermes cron create "<schedule>" "<prompt>" --name mashiru-daily --workdir <Server目录>`；
+- 否则执行 `hermes cron create "<schedule>" "<prompt>" --name mashiru-daily --workdir <Server目录> --skill mashiru-todo`；
 - 创建成功后再次打印 `hermes cron list` 确认。
 
 用法：
@@ -72,15 +72,19 @@ def main() -> int:
     plan_md = _config.forward_slashes(server_root / "data" / "plan.md")
     prompt = (
         f"这是每日例行任务（当前为占位提示词，之后可替换）。"
-        f"请检查 {todo_json} 中今天（当日日期）的待办事项，必要时生成或修正记录"
-        f"（PascalCase 字段 Id/Title/IsCompleted/CreatedAt/CompletedAt，禁止传输 HasSynced）；"
+        f"请使用 Hermes 插件 mashiru-daily 提供的 todo_* 工具维护 {todo_json}"
+        f"（PascalCase 字段 Id/Title/IsCompleted/CreatedAt/CompletedAt，禁止传输 HasSynced）："
+        f"先用 todo_list 读取当前待办，必要时用 todo_upsert / todo_delete 修正记录；"
         f"按需更新 {plan_md}。"
-        f"最后必须从工作目录执行 `python tools/stamp_todo_meta.py`，以刷新数据元信息 createdAt。"
+        f"每日例行维护结束时必须调用 todo_meta_stamp，以刷新数据元信息 createdAt。"
         f"若今日没有需要处理的事项，回复 [SILENT]。"
     )
 
     # 步骤 2：创建任务
-    create_cmd = [hermes, "cron", "create", args.schedule, prompt, "--name", args.name, "--workdir", workdir]
+    create_cmd = [
+        hermes, "cron", "create", args.schedule, prompt,
+        "--name", args.name, "--workdir", workdir, "--skill", "mashiru-todo",
+    ]
     print(f"\n运行: {subprocess.list2cmdline(create_cmd)}")
     result = _run_cmd(create_cmd, timeout=120)
     if result.returncode != 0:

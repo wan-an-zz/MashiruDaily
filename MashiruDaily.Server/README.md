@@ -21,15 +21,25 @@ MashiruDaily.Server/
 │   ├── config.py            运行设置，由环境变量 MASHIRU_DATA_DIR / MASHIRU_HOST / MASHIRU_PORT / HERMES_HOME 驱动
 │   ├── todo_store.py        todo.json 与 todo-meta.json 的纯读取/初始化函数（无 HTTP 层）
 │   └── main.py              FastAPI 入口与 GET 端点（`python -m app.main`）
+├── hermes_plugin/           Hermes 插件集合目录
+│   ├── __init__.py          集合包说明
+│   └── mashiru_daily/       Hermes 插件源目录（工具 + skill，manifest 名 mashiru-daily）
+│       ├── plugin.yaml      Hermes 插件清单
+│       ├── __init__.py      register(ctx)：注册 todo_* 工具与内置 skill
+│       ├── schemas.py       todo_* 工具的 LLM Schema
+│       ├── tools.py         todo.json / todo-meta.json 读写实现（原子写）
+│       └── skills/
+│           └── mashiru-todo/ 插件内置 skill（SKILL.md），指导 Hermes 使用 todo_* 工具
 ├── tools/
-│   ├── stamp_todo_meta.py   每日戳记脚本，唯一允许改变 createdAt 的代码路径
+│   ├── stamp_todo_meta.py   每日戳记脚本，等价于 todo_meta_stamp 工具
 │   └── test_webhook_signed.py  签名 webhook 冒烟测试（模拟客户端推送，含 --negative 负例）
-├── skills/
-│   └── mashiru-todo/        示例 skill（SKILL.md），供 Hermes 在 webhook / cron 任务中调用
+├── skills/                  （旧目录，已迁移至 hermes_plugin/mashiru_daily/skills，保留仅为兼容）
 ├── tests/
-│   └── test_api.py          GET 端点契约的 pytest 集成测试（离线）
+│   ├── test_api.py          GET 端点契约的 pytest 集成测试（离线）
+│   ├── test_hermes_plugin.py  hermes_plugin todo_* 工具离线测试
+│   └── ...
 ├── setup_server.py          一次性初始化：创建 .venv、安装依赖、初始化 data/、盖章初始 meta（幂等）
-├── register_skills.py       把 skills/ 注册进 Hermes 的 skills.external_dirs（幂等）
+├── register_skills.py       安装/链接 hermes_plugin 到 Hermes 并启用插件，注册外部 skill 目录（幂等）
 ├── configure_webhook.py     配置 Hermes webhook 平台与 todo-sync 路由（幂等，需密钥）
 ├── configure_cron.py        创建每日 Hermes cron 任务 mashiru-daily（幂等）
 ├── install_autostart.py     物理开机自启（Windows: schtasks ONSTART；Linux/macOS: systemd 系统服务/crontab）
@@ -110,7 +120,7 @@ curl http://localhost:8123/api/todo
 
 四个脚本全部幂等，重复运行不产生改动。其中直接修改 `HERMES_HOME/config.yaml` 的两个（register_skills、configure_webhook）**只在真正修改前**备份为 `config.yaml.bak-<时间戳>`；configure_cron 走 `hermes cron` 命令、install_autostart 走注册表/systemd/crontab，不触碰 config.yaml。统一用 `.venv` 内的 Python 运行（改 config.yaml 的两个依赖 ruamel.yaml，必须如此）。Hermes 与 config.yaml 的定位：默认 `%LOCALAPPDATA%\hermes`，可用环境变量 `HERMES_HOME` 覆盖。
 
-**register_skills.py**：把 `skills/` 目录以绝对路径写入 config.yaml 的 `skills.external_dirs`（不存在则创建，已包含则跳过）：
+**register_skills.py**：把 `hermes_plugin/mashiru_daily/` 以目录链接安装到 `$HERMES_HOME/plugins/mashiru-daily`，通过 Hermes CLI（`hermes plugins enable`）启用插件；同时把 `hermes_plugin/mashiru_daily/skills` 写入 config.yaml 的 `skills.external_dirs`（不存在则创建，已包含则跳过，并迁移移除旧 `Server/skills` 引用）。插件内的 `register(ctx)` 负责通过 Hermes 接口注册全部 `todo_*` 工具与内置 skill：
 
 ```powershell
 .venv\Scripts\python.exe register_skills.py
@@ -130,7 +140,7 @@ $env:MASHIRU_WEBHOOK_SECRET = "<密钥>"
 .venv\Scripts\python.exe configure_webhook.py
 ```
 
-**configure_cron.py**：创建每日 Hermes cron 任务 `mashiru-daily`（默认每日 09:00，表达式 `0 9 * * *`）。提示词要求 Hermes 检查并更新 `data/todo.json` 与 `data/plan.md`，且在每次运行结束时执行 `python tools/stamp_todo_meta.py` 刷新 createdAt。已存在则跳过。可选 `--name`、`--schedule`、`--workdir`：
+**configure_cron.py**：创建每日 Hermes cron 任务 `mashiru-daily`（默认每日 09:00，表达式 `0 9 * * *`）。提示词要求 Hermes 使用 `todo_*` 工具检查并更新 `data/todo.json` 与 `data/plan.md`，每次运行结束时调用 `todo_meta_stamp` 刷新 createdAt；创建命令附带 `--skill mashiru-todo`。已存在则跳过。可选 `--name`、`--schedule`、`--workdir`：
 
 ```powershell
 .venv\Scripts\python.exe configure_cron.py
@@ -169,8 +179,8 @@ sudo .venv/bin/python install_autostart.py --uninstall     # 删除自启
 
 `todo-meta.json` 的 `createdAt` 是客户端判定「是否需要拉取」的主字段（协议 5.1、5.3）：
 
-- `createdAt` **只在 `tools/stamp_todo_meta.py` 运行时改变**。运行时机仅两处：`setup_server.py` 首次引导，以及每日 cron agent 每次运行结束时（configure_cron.py 的提示词已内建该步骤）。
-- **webhook 驱动的 `todo.json` 修改绝不改变 `createdAt`**。Hermes 收到 webhook 后直接编辑 `todo.json`，不要碰侧车。否则客户端每次 webhook 同步后都会因时间戳更新而误判「需要拉取」，造成无谓的全量拉取。
+- `createdAt` **只在 `tools/stamp_todo_meta.py` 或 Hermes 插件工具 `todo_meta_stamp` 运行时改变**。运行时机仅两处：`setup_server.py` 首次引导，以及每日 cron agent 每次运行结束时（configure_cron.py 的提示词已内建该步骤）。
+- **webhook 驱动的 `todo.json` 修改绝不改变 `createdAt`**。Hermes 收到 webhook 后应使用 `todo_*` 工具更新 `todo.json`，但**禁止调用 `todo_meta_stamp`**，也不要直接编辑侧车。否则客户端每次 webhook 同步后都会因时间戳更新而误判「需要拉取」，造成无谓的全量拉取。
 - `count` 始终是实时值：`GET /api/todo/meta` 返回前取 `len(todo.json)`，侧车里的旧 count 不参与。
 
 ## 7. 数据文件
@@ -215,7 +225,7 @@ sudo .venv/bin/python install_autostart.py --uninstall     # 删除自启
 pytest MashiruDaily.Server/tests -v
 ```
 
-覆盖：meta 结构合法、`GET /api/todo` 逐字回显 PascalCase 且无 `HasSynced`、空目录返回空数组、首次请求自动建侧车、非法 JSON 返回 500、webhook 式编辑不改 createdAt 而 stamp 会改、count 实时反映条数。已全部通过。
+覆盖：meta 结构合法、`GET /api/todo` 逐字回显 PascalCase 且无 `HasSynced`、空目录返回空数组、首次请求自动建侧车、非法 JSON 返回 500、webhook 式编辑不改 createdAt 而 stamp 会改、count 实时反映条数，以及 `hermes_plugin` 的 `todo_*` 工具读写/upsert/delete/stamp 行为。已全部通过。
 
 另可运行 `tools/test_webhook_signed.py` 做端到端冒烟：向 Hermes 网关 `:8644/webhooks/todo-sync` 发送签名事件（`--secret` 必填），2xx 即成功；`--negative` 用错误密钥验证网关返回 401。
 

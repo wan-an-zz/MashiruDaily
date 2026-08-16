@@ -220,7 +220,7 @@ def main(argv: list[str] | None = None) -> int:
         print("[OK] setup_server.py 完成。")
 
     # 步骤 2/6：register_skills.py（用 venv python 运行）
-    print("\n[2/6] 注册 skills 到 Hermes（register_skills.py）")
+    print("\n[2/6] 注册 Hermes 插件与 skills（register_skills.py）")
     if args.skip_skills:
         print("[SKIP] 已跳过（--skip-skills）。")
     elif not _check_venv_python(venv_py):

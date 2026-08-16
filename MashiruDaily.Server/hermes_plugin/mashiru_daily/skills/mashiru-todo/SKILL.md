@@ -15,8 +15,6 @@ metadata:
 
 本技能指导 Hermes Agent 维护 MashiruDaily 服务器端的待办数据：`data/todo.json`（数据源）与 `data/plan.md`（当日规划）。客户端（Avalonia 桌面 / Android / TUI）通过 `GET /api/todo` 拉取这份数据，因此**一切修改必须严格遵守本文件规定的 schema 与纪律**。
 
-> 本文件是 `hermes_plugin/skills/mashiru-todo/SKILL.md` 的兼容副本；推荐通过 Hermes 插件 `mashiru-daily` 加载（命名空间技能 `mashiru-daily:mashiru-todo` 或普通技能名 `mashiru-todo`）。
-
 ## When to Use (何时使用)
 
 在以下场景激活本技能：
