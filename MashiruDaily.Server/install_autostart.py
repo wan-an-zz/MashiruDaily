@@ -469,11 +469,11 @@ def main() -> int:
 
     # POSIX（Linux/macOS）：优先 systemd 系统服务（物理开机自启，需 root/sudo），
     # 无 systemd 时回退 crontab @reboot（cron 守护进程开机执行，免 sudo）。
-    if not args.dry_run and _systemd_available():
+    if _systemd_available():
         print(f"[INFO] 检测到 systemd，使用系统服务（{SERVICE_NAME}，物理开机自启）。")
         return _install_systemd(args)
 
-    print("[INFO] 未检测到 systemd（或 --dry-run），回退 crontab @reboot 方式（开机即执行，无需登录）。")
+    print("[INFO] 未检测到 systemd，回退 crontab @reboot 方式（开机即执行，无需登录）。")
     return _install_crontab(args)
 
 
