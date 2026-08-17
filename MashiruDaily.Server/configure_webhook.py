@@ -242,13 +242,18 @@ def _restart_gateway(hermes: str) -> int:
         if _ROOT_REFUSAL_SIGNAL in combined:
             print("修复建议：运行 `sudo hermes gateway restart`，")
             print("或 `sudo systemctl restart hermes-gateway.service`。")
+            if combined.strip():
+                print("\nHermes 输出：")
+                print(combined.strip())
+            return 2
         else:
             print("修复建议：以 Hermes 所属用户执行 `hermes gateway restart`")
             print("（若未登录先 `sudo loginctl enable-linger <用户>`）或 `hermes gateway run`。")
-        if combined.strip():
-            print("\nHermes 输出：")
-            print(combined.strip())
-        return 0
+            if combined.strip():
+                print("\nHermes 输出：")
+                print(combined.strip())
+            return 3
+        
 
     print("警告：网关重启命令返回非零退出码。", file=sys.stderr)
     print(combined.strip(), file=sys.stderr)

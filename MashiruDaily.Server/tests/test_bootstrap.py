@@ -448,3 +448,62 @@ def test_verify_no_verify_skips_popen(monkeypatch) -> None:
                          "--skip-cron", "--skip-autostart", "--no-verify"])
     assert rc == 0
     assert not popen_called
+
+
+def test_missing_secret_prompt_replayed_at_end(monkeypatch, capsys) -> None:
+    """缺 secret 失败时，末尾应再次输出要求用户提供密钥的提示。"""
+    monkeypatch.setattr("bootstrap.os.environ", {})
+    monkeypatch.setattr(Path, "is_file", lambda self: True)
+    _monkey_run(monkeypatch, "configure_webhook.py")
+    rc = bootstrap.main(["--skip-autostart", "--no-verify"])
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "以下操作需要您手动完成，请勿遗漏：" in out
+    assert "请通过 --secret <密钥> 或环境变量 MASHIRU_WEBHOOK_SECRET 提供" in out
+
+
+def test_missing_venv_prompt_replayed_at_end(monkeypatch, capsys) -> None:
+    """--skip-setup 且 venv 缺失时，末尾应再次输出先运行 setup_server 的提示。"""
+    monkeypatch.setattr(Path, "is_file", lambda self: False)
+    _monkey_run(monkeypatch, "configure_cron.py")
+    rc = bootstrap.main(["--skip-setup", "--skip-webhook", "--no-verify"])
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "以下操作需要您手动完成，请勿遗漏：" in out
+    assert "请先运行 setup_server.py 创建虚拟环境" in out
+
+
+def test_custom_venv_warning_replayed_at_end(monkeypatch, capsys) -> None:
+    """自定义 --venv 时，末尾应再次输出 install_autostart 硬编码 .venv 的警告。"""
+    monkeypatch.setattr(Path, "is_file", lambda self: True)
+    _monkey_run(monkeypatch, "install_autostart.py")
+    rc = bootstrap.main(["--venv", "myenv", "--skip-setup", "--skip-skills",
+                         "--skip-webhook", "--skip-cron", "--no-verify"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "以下操作需要您手动完成，请勿遗漏：" in out
+    assert "install_autostart 硬编码 .venv，自定义虚拟环境名不会生效" in out
+
+
+def test_no_restart_manual_restart_replayed_at_end(monkeypatch, capsys) -> None:
+    """--no-restart 成功配置后，末尾应再次输出手动重启网关的提示。"""
+    monkeypatch.setattr("bootstrap.os.environ",
+                        {"MASHIRU_WEBHOOK_SECRET": "env-secret"})
+    monkeypatch.setattr(Path, "is_file", lambda self: True)
+    _monkey_run(monkeypatch, "configure_webhook.py")
+    rc = bootstrap.main(["--no-restart", "--skip-autostart", "--no-verify"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "以下操作需要您手动完成，请勿遗漏：" in out
+    assert "hermes gateway restart" in out
+
+
+def test_no_action_prompt_summary_when_none_recorded(monkeypatch, capsys) -> None:
+    """全程无用户操作提示时，末尾不应输出汇总块。"""
+    _monkey_run(monkeypatch, "setup_server.py")
+    rc = bootstrap.main(["--skip-setup", "--skip-skills", "--skip-webhook",
+                         "--skip-cron", "--skip-autostart", "--no-verify"])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "以下操作需要您手动完成，请勿遗漏：" not in captured.err
+    assert "以下操作需要您手动完成，请勿遗漏：" not in captured.out

@@ -32,6 +32,9 @@ POLL_INTERVAL = 0.5
 # 拉取服务器默认端口（与 app/config.py 一致，可用环境变量 MASHIRU_PORT 覆盖）
 DEFAULT_PORT = "8123"
 
+# 程序运行过程中要求用户手动完成的操作提示；在 main 结束前统一再次输出
+_ACTION_PROMPTS: list[str] = []
+
 
 def venv_python(venv_dir: Path) -> Path:
     """返回虚拟环境内的解释器路径：Windows 为 Scripts/python.exe，其余平台为 bin/python。
@@ -47,11 +50,30 @@ def _print_cmd(cmd: list[str]) -> None:
     print(f"运行: {subprocess.list2cmdline(cmd)}")
 
 
+def _remember_action_prompt(message: str) -> None:
+    """打印一条要求用户手动操作的提示，并记录到程序末尾统一重放。"""
+    _ACTION_PROMPTS.append(message)
+
+
+def _print_action_prompts() -> None:
+    """在程序最后再次输出所有要求用户手动操作的提示。"""
+    if not _ACTION_PROMPTS:
+        return
+    print("\n" + "=" * 60)
+    print("以下操作需要您手动完成，请勿遗漏：")
+    for i, prompt in enumerate(_ACTION_PROMPTS, 1):
+        print(f"{i}. {prompt}")
+    print("=" * 60)
+
+
 def _check_venv_python(venv_py: Path) -> bool:
     """预检虚拟环境解释器是否存在；缺失时打印提示并返回 False。"""
     if venv_py.is_file():
         return True
-    print(f"[FAIL] 未找到虚拟环境解释器 {venv_py}。请先运行 setup_server.py 创建虚拟环境，或去掉 --skip-setup。", file=sys.stderr)
+    _remember_action_prompt(
+        f"[FAIL] 未找到虚拟环境解释器 {venv_py}。请先运行 setup_server.py 创建虚拟环境，或去掉 --skip-setup。",
+        file=sys.stderr,
+    )
     return False
 
 
@@ -173,7 +195,7 @@ def _verify(venv_py: Path) -> int:
             _terminate_proc(proc)
 
 
-def main(argv: list[str] | None = None) -> int:
+def _main(argv: list[str] | None = None) -> int:
     """解析参数并按序执行六个步骤；返回退出码（不抛出 SystemExit）。"""
     parser = argparse.ArgumentParser(
         description="MashiruDaily.Server 一键初始化：按序串联六个幂等子脚本并做启动验证"
@@ -241,7 +263,10 @@ def main(argv: list[str] | None = None) -> int:
     else:
         secret = args.secret or os.environ.get("MASHIRU_WEBHOOK_SECRET")
         if not secret:
-            print("[FAIL] 缺少 webhook 密钥：请通过 --secret <密钥> 或环境变量 MASHIRU_WEBHOOK_SECRET 提供。", file=sys.stderr)
+            _remember_action_prompt(
+                "[FAIL] 缺少 webhook 密钥：请通过 --secret <密钥> 或环境变量 MASHIRU_WEBHOOK_SECRET 提供。",
+                file=sys.stderr,
+            )
             return 1
         base_env = dict(os.environ)
         if args.secret:
@@ -251,10 +276,17 @@ def main(argv: list[str] | None = None) -> int:
             webhook_cmd.append("--no-restart")
         rc = _execute(webhook_cmd, env=base_env, dry_run=args.dry_run,
                       note="（secret 经环境变量 MASHIRU_WEBHOOK_SECRET 传入，不显示）")
-        if rc != 0:
+        if rc == 1:
             print(f"[FAIL] configure_webhook.py 失败（退出码 {rc}）。", file=sys.stderr)
             return rc
+        elif rc == 2:
+            _remember_action_prompt("[提示] Hermes 拒绝在 root 下重启网关，webhook 配置已写入 config.yaml，\n将在 Hermes 下次重启时生效。本次未执行重启；可手动重启或等待下次重启。\n建议运行`sudo systemctl restart hermes-gateway.service完成重启`。")
+        elif rc == 3:
+            _remember_action_prompt("[提示] Hermes 拒绝在 root 下重启网关，webhook 配置已写入 config.yaml，\n将在 Hermes 下次重启时生效。本次未执行重启；可手动重启或等待下次重启。\n建议在Hermes所属用户下运行`hermes gateway restart`或`sudo systemctl restart hermes-gateway.service完成重启`")
         print("[OK] configure_webhook.py 完成。")
+        
+        if args.no_restart and not args.dry_run:
+            _remember_action_prompt("[提示] webhook 配置已写入但未自动重启网关，请手动执行：hermes gateway restart")
 
     # 步骤 4/6：configure_cron.py（透传 --schedule）
     print("\n[4/6] 创建每日 Hermes cron 任务 mashiru-daily（configure_cron.py）")
@@ -280,7 +312,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     else:
         if args.venv != ".venv":
-            print("[WARN] install_autostart 硬编码 .venv，自定义虚拟环境名不会生效。")
+            _remember_action_prompt("[WARN] install_autostart 硬编码 .venv，自定义虚拟环境名不会生效。")
         if args.dry_run:
             autostart_cmd = [str(venv_py), "install_autostart.py", "--dry-run"]
         else:
@@ -301,6 +333,16 @@ def main(argv: list[str] | None = None) -> int:
         print("[DRY-RUN] 演练模式，跳过实际启动与探测。")
         return 0
     return _verify(venv_py)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """入口：执行初始化，并在最后重放所有要求用户手动完成的提示。"""
+    _ACTION_PROMPTS.clear()
+    try:
+        return _main(argv)
+    finally:
+        _print_action_prompts()
+        _ACTION_PROMPTS.clear()
 
 
 if __name__ == "__main__":
