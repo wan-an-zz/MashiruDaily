@@ -81,6 +81,21 @@ def test_todo_save_full_rebuild_generates_new_ids(plugin_data_dir) -> None:
     assert first_id != second_id
 
 
+def test_todo_save_archives_existing_file_before_overwrite(plugin_data_dir) -> None:
+    """todo_save 覆盖前先把旧 todo.json 存档到 data/backups/。"""
+    _invoke(tools.todo_save, items=["买牛奶"])
+    assert not (plugin_data_dir / "backups").exists()
+
+    _invoke(tools.todo_save, items=["写周报"])
+    backup_files = list((plugin_data_dir / "backups").glob("todo-*.json"))
+    assert len(backup_files) == 1
+    archived = json.loads(backup_files[0].read_text(encoding="utf-8"))
+    assert [item["Title"] for item in archived] == ["买牛奶"]
+
+    listed = _invoke(tools.todo_list)
+    assert [item["Title"] for item in listed["items"]] == ["写周报"]
+
+
 def test_todo_upsert_adds_without_id(plugin_data_dir) -> None:
     """todo_upsert 未传 Id 时新增待办，Id/CreatedAt 由程序生成。"""
     result = _invoke(tools.todo_upsert, title="买菜")

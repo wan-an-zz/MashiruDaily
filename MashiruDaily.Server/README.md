@@ -205,6 +205,8 @@ sudo .venv/bin/python install_autostart.py --uninstall     # 删除自启
 | `CreatedAt` | string (ISO 8601) | 创建时间 |
 | `CompletedAt` | string (ISO 8601) 或 null | 完成时间，未完成时为 null |
 
+`todo_save` 在覆盖写入前会自动把旧 `todo.json` 存档到 `data/backups/todo-<时间戳>-<随机后缀>.json`。
+
 **`data/todo-meta.json`**：恰好三个字段：
 
 ```json

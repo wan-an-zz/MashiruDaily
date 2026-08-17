@@ -12,6 +12,7 @@
 
 import json
 import os
+import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -83,6 +84,19 @@ def _new_item(title: str) -> dict:
         "CreatedAt": _now_utc_iso(),
         "CompletedAt": None,
     }
+
+
+def _archive_todo_before_overwrite() -> Path | None:
+    """覆盖前将现有 todo.json 存档到 data/backups/todo-<时间戳>-<随机后缀>.json；无文件时返回 None。"""
+    src = _todo_path()
+    if not src.exists():
+        return None
+    backup_dir = _data_dir() / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
+    backup_path = backup_dir / f"todo-{timestamp}-{uuid.uuid4().hex[:8]}.json"
+    shutil.copy2(src, backup_path)
+    return backup_path
 
 
 def _load_or_init_meta() -> dict:
@@ -159,7 +173,7 @@ def todo_get(args: dict, **kwargs) -> str:
 
 
 def todo_save(args: dict, **kwargs) -> str:
-    """整体覆盖写入 data/todo.json，只接收 Title 数组，其余字段由程序生成。"""
+    """整体覆盖写入 data/todo.json：覆盖前先将旧文件存档到 data/backups，再执行写入。"""
     try:
         titles = args.get("items")
         if titles is None:
@@ -171,6 +185,7 @@ def todo_save(args: dict, **kwargs) -> str:
             if not isinstance(title, str) or not title.strip():
                 return _err("Title 必须是非空字符串")
             items.append(_new_item(title))
+        _archive_todo_before_overwrite()
         _atomic_write_json(_todo_path(), items)
         return _ok({"success": True, "count": len(items)})
     except Exception as exc:
