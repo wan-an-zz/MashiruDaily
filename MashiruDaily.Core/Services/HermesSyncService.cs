@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using MashiruDaily.Core.Abstracts;
+using MashiruDaily.Core.Converters;
 using MashiruDaily.Core.Models;
 using Microsoft.Extensions.Logging;
 
@@ -53,7 +54,11 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
 
     private static readonly JsonSerializerOptions SnakeCaseOption = new()
     {
+<<<<<<< HEAD
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+=======
+        Converters = { new LocalDateTimeJsonConverter() },
+>>>>>>> feature/服务端
     };
 
     private readonly ITodoService _todoService;

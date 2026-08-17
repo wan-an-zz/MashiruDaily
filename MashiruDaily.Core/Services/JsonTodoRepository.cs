@@ -4,6 +4,7 @@ using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 using MashiruDaily.Core.Abstracts;
+using MashiruDaily.Core.Converters;
 using MashiruDaily.Core.Models;
 using Microsoft.Extensions.Logging;
 
@@ -54,7 +55,12 @@ public sealed class JsonTodoRepository : ITodoRepository
         try
         {
             Directory.CreateDirectory(_directory);
-            var json = JsonSerializer.Serialize(items, new JsonSerializerOptions { WriteIndented = true });
+            var options = new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                Converters = { new LocalDateTimeJsonConverter() },
+            };
+            var json = JsonSerializer.Serialize(items, options);
             var tmp = _filePath + ".tmp";
             await File.WriteAllTextAsync(tmp, json);
             File.Move(tmp, _filePath, overwrite: true);
