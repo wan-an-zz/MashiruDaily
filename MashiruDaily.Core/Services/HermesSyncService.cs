@@ -54,11 +54,8 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
 
     private static readonly JsonSerializerOptions SnakeCaseOption = new()
     {
-<<<<<<< HEAD
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-=======
-        Converters = { new LocalDateTimeJsonConverter() },
->>>>>>> feature/服务端
+        Converters = { new LocalDateTimeJsonConverter() }
     };
 
     private readonly ITodoService _todoService;
