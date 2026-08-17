@@ -51,9 +51,9 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
         public string? CreatedAt { get; set; }
     }
 
-    private static readonly JsonSerializerOptions CamelCaseJson = new()
+    private static readonly JsonSerializerOptions SnakeCaseOption = new()
     {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
 
     private readonly ITodoService _todoService;
@@ -408,7 +408,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
         var eventId = Guid.NewGuid();
         var envelope = new
         {
-            type = eventType,
+            eventType,
             clientId = _clientId,
             eventId,
             timestamp = DateTimeOffset.Now.ToString("O", CultureInfo.InvariantCulture),
@@ -421,7 +421,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
                 completedAt = item.CompletedAt,
             },
         };
-        var rawBody = JsonSerializer.Serialize(envelope, CamelCaseJson);
+        var rawBody = JsonSerializer.Serialize(envelope, SnakeCaseOption);
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
         var signature = HermesWebhookSigner.ComputeSignature(_settings.WebhookSecret, timestamp, rawBody);
         var url = $"{_settings.HermesBaseUrl.TrimEnd('/')}/webhooks/{_settings.WebhookRouteName}";
@@ -503,7 +503,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
                 return null;
             }
 
-            meta = await metaResponse.Content.ReadFromJsonAsync<MetaDate>(CamelCaseJson);
+            meta = await metaResponse.Content.ReadFromJsonAsync<MetaDate>(SnakeCaseOption);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or NotSupportedException)
         {
