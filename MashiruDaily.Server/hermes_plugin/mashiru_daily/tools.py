@@ -4,10 +4,10 @@
 - 只依赖 Python 标准库，便于 Hermes 进程直接加载；
 - 所有 handler 都返回 JSON 字符串，错误也以 JSON 返回，绝不向上抛异常；
 - 落盘沿用原子写（tmp + os.replace），避免半截文件；
-- 与 app/todo_store.py 的语义保持一致：todo-meta.json 的 createdAt 只能由
+- 与 app/todo_store.py 的语义保持一致：todo-meta.json 的 created_at 只能由
   todo_meta_stamp 刷新。
-- Id/CreatedAt/CompletedAt 统一由程序生成或维护，Hermes Agent 不自行编造；
-  只有更新/完成已有条目时可传入已存在的 Id 用于定位。
+- id/created_at/completed_at 统一由程序生成或维护，Hermes Agent 不自行编造；
+  只有更新/完成已有条目时可传入已存在的 id 用于定位。
 """
 
 import json
@@ -76,13 +76,13 @@ def _load_todo_list() -> list:
 
 
 def _new_item(title: str) -> dict:
-    """根据标题生成一条完整待办：Id/CreatedAt 由程序生成，CompletedAt 初始为 null。"""
+    """根据标题生成一条完整待办：id/created_at 由程序生成，completed_at 初始为 null。"""
     return {
-        "Id": str(uuid.uuid4()),
-        "Title": title,
-        "IsCompleted": False,
-        "CreatedAt": _now_utc_iso(),
-        "CompletedAt": None,
+        "id": str(uuid.uuid4()),
+        "title": title,
+        "is_completed": False,
+        "created_at": _now_utc_iso(),
+        "completed_at": None,
     }
 
 
@@ -107,12 +107,12 @@ def _load_or_init_meta() -> dict:
             data = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
             raise ValueError(f"todo-meta.json 解析失败（{path}）：{exc}") from exc
-        if not isinstance(data, dict) or not {"date", "createdAt", "count"}.issubset(data):
-            raise ValueError(f"todo-meta.json 结构不合法（{path}）：需要 date/createdAt/count 三键")
+        if not isinstance(data, dict) or not {"date", "created_at", "count"}.issubset(data):
+            raise ValueError(f"todo-meta.json 结构不合法（{path}）：需要 date/created_at/count 三键")
         return data
     meta = {
         "date": _today_local(),
-        "createdAt": _now_utc_iso(),
+        "created_at": _now_utc_iso(),
         "count": len(_load_todo_list()),
     }
     _atomic_write_json(path, meta)
@@ -120,20 +120,20 @@ def _load_or_init_meta() -> dict:
 
 
 def _current_meta() -> dict:
-    """返回当前元数据：date/createdAt 透传侧车，count 实时取自 todo.json。"""
+    """返回当前元数据：date/created_at 透传侧车，count 实时取自 todo.json。"""
     meta = _load_or_init_meta()
     return {
         "date": meta["date"],
-        "createdAt": meta["createdAt"],
+        "created_at": meta["created_at"],
         "count": len(_load_todo_list()),
     }
 
 
 def _stamp_meta() -> dict:
-    """刷新 todo-meta.json：date=今日、createdAt=当前 UTC、count=实时条数。"""
+    """刷新 todo-meta.json：date=今日、created_at=当前 UTC、count=实时条数。"""
     meta = {
         "date": _today_local(),
-        "createdAt": _now_utc_iso(),
+        "created_at": _now_utc_iso(),
         "count": len(_load_todo_list()),
     }
     _atomic_write_json(_meta_path(), meta)
@@ -159,13 +159,13 @@ def todo_list(args: dict, **kwargs) -> str:
 
 
 def todo_get(args: dict, **kwargs) -> str:
-    """按 Id 读取单条待办。"""
+    """按 id 读取单条待办。"""
     try:
         item_id = str(args.get("id") or "")
         if not item_id:
             return _err("缺少参数 id")
         for item in _load_todo_list():
-            if item.get("Id") == item_id:
+            if item.get("id") == item_id:
                 return _ok({"success": True, "item": item})
         return _ok({"success": False, "found": False, "id": item_id})
     except Exception as exc:
@@ -183,7 +183,7 @@ def todo_save(args: dict, **kwargs) -> str:
         items = []
         for title in titles:
             if not isinstance(title, str) or not title.strip():
-                return _err("Title 必须是非空字符串")
+                return _err("title 必须是非空字符串")
             items.append(_new_item(title))
         _archive_todo_before_overwrite()
         _atomic_write_json(_todo_path(), items)
@@ -193,7 +193,7 @@ def todo_save(args: dict, **kwargs) -> str:
 
 
 def todo_upsert(args: dict, **kwargs) -> str:
-    """按 Id 更新已有待办标题；未传 Id 或 Id 为空时新增待办。"""
+    """按 id 更新已有待办标题；未传 id 或 id 为空时新增待办。"""
     try:
         title = args.get("title")
         if not isinstance(title, str) or not title.strip():
@@ -202,8 +202,8 @@ def todo_upsert(args: dict, **kwargs) -> str:
         items = _load_todo_list()
         if item_id:
             for index, existing in enumerate(items):
-                if existing.get("Id") == item_id:
-                    items[index] = {**existing, "Title": title}
+                if existing.get("id") == item_id:
+                    items[index] = {**existing, "title": title}
                     _atomic_write_json(_todo_path(), items)
                     return _ok({"success": True, "created": False, "item": items[index], "count": len(items)})
             return _ok({"success": False, "found": False, "id": item_id})
@@ -216,7 +216,7 @@ def todo_upsert(args: dict, **kwargs) -> str:
 
 
 def todo_completed(args: dict, **kwargs) -> str:
-    """按 Id 修改待办完成状态；CompletedAt 由程序生成或清空。"""
+    """按 id 修改待办完成状态；completed_at 由程序生成或清空。"""
     try:
         item_id = str(args.get("id") or "")
         if not item_id:
@@ -226,9 +226,9 @@ def todo_completed(args: dict, **kwargs) -> str:
             return _err("参数 completed 必须是布尔值")
         items = _load_todo_list()
         for item in items:
-            if item.get("Id") == item_id:
-                item["IsCompleted"] = completed
-                item["CompletedAt"] = _now_utc_iso() if completed else None
+            if item.get("id") == item_id:
+                item["is_completed"] = completed
+                item["completed_at"] = _now_utc_iso() if completed else None
                 _atomic_write_json(_todo_path(), items)
                 return _ok({"success": True, "item": item, "count": len(items)})
         return _ok({"success": False, "found": False, "id": item_id})
@@ -237,13 +237,13 @@ def todo_completed(args: dict, **kwargs) -> str:
 
 
 def todo_delete(args: dict, **kwargs) -> str:
-    """按 Id 删除待办。"""
+    """按 id 删除待办。"""
     try:
         item_id = str(args.get("id") or "")
         if not item_id:
             return _err("缺少参数 id")
         items = _load_todo_list()
-        new_items = [item for item in items if item.get("Id") != item_id]
+        new_items = [item for item in items if item.get("id") != item_id]
         if len(new_items) == len(items):
             return _ok({"success": False, "deleted": False, "id": item_id})
         _atomic_write_json(_todo_path(), new_items)
@@ -261,7 +261,7 @@ def todo_meta_get(args: dict, **kwargs) -> str:
 
 
 def todo_meta_stamp(args: dict, **kwargs) -> str:
-    """刷新 data/todo-meta.json 的 createdAt 与 count。"""
+    """刷新 data/todo-meta.json 的 created_at 与 count。"""
     try:
         return _ok({"success": True, "meta": _stamp_meta()})
     except Exception as exc:

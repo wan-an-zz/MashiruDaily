@@ -71,20 +71,20 @@ Step 7 调用 TODO_META_STAMP （todo_meta_stamp）为当日布置的待办盖�
 ### Step 4 查看前日待办完成情况
 
 - 调用 **TODO_LIST**（工具名 `todo_list`，无参数）。
-- 返回当前 todo.json 的全部待办（正常情况下即**前日布置**的任务），每项含字段：`Id`、`Title`、`IsCompleted`、`CreatedAt`、`CompletedAt`。
-- 从返回中挑出 **`IsCompleted: false`** 的项 = 前日未完成，需要顺延到今天。
+- 返回当前 todo.json 的全部待办（正常情况下即**前日布置**的任务），每项含字段：`id`、`title`、`is_completed`、`created_at`、`completed_at`。
+- 从返回中挑出 **`is_completed: false`** 的项 = 前日未完成，需要顺延到今天。
 - todo.json 不存在时 TODO_LIST 返回空数组（空列表），此时前日无未完成任务。
 
 ### Step 5 在 plan-daily.md 中标记
 
-- 在Step 4 中知悉的`IsCompleted: true`的项全部在`plan-daily.md`的「完成状态」中标记**已完成**。
+- 在Step 4 中知悉的`is_completed: true`的项全部在`plan-daily.md`的「完成状态」中标记**已完成**。
 
 
 ### Step 6 写入 todo.json
 
 1. **合并**：
    - 当日所有任务（Step 3 产出，全部为「未完成」新任务）
-   - 前日所有未完成任务（Step 4 挑出的 `IsCompleted: false` 项，取其 `Title` 顺延）
+   - 前日所有未完成任务（Step 4 挑出的 `is_completed: false` 项，取其 `title` 顺延）
    - 前日**已完成**的任务不再保留（todo.json 只放「今天要做」的待办）
 2. 调用 **TODO_SAVE**（工具名 `todo_save`），参数 `items` 为**字符串数组**（每个元素 = 一条任务标题），全量重建 todo.json。
    - 例：`todo_save({"items": ["数学｜…", "物理｜…", "英语｜…"]})`
@@ -109,7 +109,7 @@ Step 7 调用 TODO_META_STAMP （todo_meta_stamp）为当日布置的待办盖�
 1. **确定当天**：服务器 `2026-08-15 16:30 UTC` → +8h = 北京时间 8/16 → **当天 = 08-16**
 2. **读取** plan-daily.md
 3. **当日任务**（08-16）：`数学｜模块6·类型2 抽象函数 必刷一百讲`、`语文｜背诵 六国论 D4 默写订正`
-4. **TODO_LIST**：当前 todo.json = `[{Title: "数学｜模块6·类型1…", IsCompleted: true}, {Title: "物理｜训练2.1 剩余 14 题", IsCompleted: false}]` → 前日未完成 = `物理｜训练2.1 剩余 14 题`
+4. **TODO_LIST**：当前 todo.json = `[{title: "数学｜模块6·类型1…", is_completed: true}, {title: "物理｜训练2.1 剩余 14 题", is_completed: false}]` → 前日未完成 = `物理｜训练2.1 剩余 14 题`
 5. **写`plan-daily.md`**：将`"数学｜模块6·类型1…"`对应的完成状态改为**已完成**
 6. **TODO_SAVE**：`{"items": ["数学｜模块6·类型2 抽象函数 必刷一百讲", "语文｜背诵 六国论 D4 默写订正", "物理｜训练2.1 剩余 14 题"]}` → 写入后复查确认 3 条
 
@@ -118,7 +118,7 @@ Step 7 调用 TODO_META_STAMP （todo_meta_stamp）为当日布置的待办盖�
 1. **时区是头号坑**：服务器 UTC，用户北京时间（UTC+8）。确定「当天 / 前日」必须先换算，直接拿 UTC 日期会差一天（曾真实发生：8/2 误判成 8/1）。
 2. **TODO_SAVE 是全量覆盖**：写入后 `todo.json` 只包含本次传入的 items。因此**必须先 TODO_LIST 取全前日未完成任务再合并**——只写当日任务会把前日未完成全部丢掉。
 3. **前日已完成的不保留**：`todo.json` 是「当前待办」清单，不是历史记录；已完成任务从列表移除属正常行为，不要手动把它们加回去。
-4. **TODO_SAVE 只收字符串数组**：传对象（如 `[{"Title": "x"}]`）会被拒绝（success=false，原数据不动）。需要的是标题字符串列表。
+4. **TODO_SAVE 只收字符串数组**：传对象（如 `[{"title": "x"}]`）会被拒绝（success=false，原数据不动）。需要的是标题字符串列表。
 5. **任务标题要自包含**：用户看到 todo 列表要能直接行动，标题里带上学科、内容、教辅与章节/页码，不要只写「做题」「背书」。
 6. **只搬运不创作**：任务内容一律来自 `plan-daily.md`；计划里没有的任务不脑补添加（主人曾明确纠正「把计划改成我安排的那样」——服务器旧目录结构 ≠ 主人实体书结构）。
 7. **计划须先过审查**：`plan-daily.md` 未经用户审查通过不得作为布置依据。

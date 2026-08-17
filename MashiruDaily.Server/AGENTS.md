@@ -11,7 +11,7 @@
 | 路径 | 内容 |
 |---|---|
 | `app/` | `main.py`（FastAPI 入口+端点）、`todo_store.py`（纯数据读写，无 HTTP）、`config.py`（环境变量驱动配置） |
-| `hermes_plugin/mashiru_daily/` | Hermes 插件：`tools.py`（todo_* 工具实现，原子写）、`schemas.py`（LLM Schema，钉了 HasSynced/createdAt 禁令）、`plugin.yaml` |
+| `hermes_plugin/mashiru_daily/` | Hermes 插件：`tools.py`（todo_* 工具实现，原子写）、`schemas.py`（LLM Schema，钉了 has_synced/created_at 禁令）、`plugin.yaml` |
 | `tools/test_webhook_signed.py` | 签名 webhook 冒烟（唯一联网测试，**不在 pytest 套件内**） |
 | `tests/` | 52 个离线契约测试（test_api 9 / test_hermes_plugin 7 / test_bootstrap 23 / test_configure_webhook 11 / test_install_autostart 2） |
 | 根目录脚本 | `setup_server.py`、`register_hermes_plugin.py`、`configure_webhook.py`、`configure_cron.py`、`install_autostart.py`、`bootstrap.py`、`_config.py`（共享工具） |
@@ -25,8 +25,8 @@ pytest MashiruDaily.Server/tests -v     # 完全离线
 
 ## 纪律（违反 = 协议破坏或安全事故）
 
-- **`createdAt` 只在 `todo_meta_stamp` 运行时改变**（仅两处：`setup_server.py` 首次引导、每日 cron 结束）。webhook 驱动的 `todo.json` 修改**禁止**碰侧车，否则客户端每次同步都误判「需要拉取」。
-- **`HasSynced` 禁止出现**：`data/todo.json` 不含它，工具校验拒绝写入，Schema 文档明令禁止。
+- **`created_at` 只在 `todo_meta_stamp` 运行时改变**（仅两处：`setup_server.py` 首次引导、每日 cron 结束）。webhook 驱动的 `todo.json` 修改**禁止**碰侧车，否则客户端每次同步都误判「需要拉取」。
+- **`has_synced` 禁止出现**：`data/todo.json` 不含它，工具校验拒绝写入，Schema 文档明令禁止。
 - **密钥纪律**：来自 `--secret` 或 `MASHIRU_WEBHOOK_SECRET`，禁硬编码/交互/进命令行/打印（打印前深拷贝 + 掩码 `***`）。`bootstrap.py` 经环境变量注入子进程。
 - **配置走环境变量**（`MASHIRU_DATA_DIR`/`MASHIRU_HOST`/`MASHIRU_PORT`/`HERMES_HOME`），路径相对 `SERVER_ROOT` 解析，**绝不用 `os.getcwd()`**（cron/systemd 启动时 cwd 不可信）。
 - **幂等可重跑**：全部装配脚本；改 `config.yaml` 前备份 `config.yaml.bak-<时间戳>`；`register_hermes_plugin.py` 遇已存在插件目录绝不覆盖；cron 任务名判断要求词边界。

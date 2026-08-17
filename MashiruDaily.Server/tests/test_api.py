@@ -20,13 +20,13 @@ SERVER_ROOT = Path(__file__).resolve().parent.parent
 
 
 class _TodoFixture(TypedDict):
-    """测试用的 PascalCase 待办条目（与 C# 端契约一致）。"""
+    """测试用的 snake_case 待办条目（与 C# 端契约一致）。"""
 
-    Id: str
-    Title: str
-    IsCompleted: bool
-    CreatedAt: str
-    CompletedAt: str | None
+    id: str
+    title: str
+    is_completed: bool
+    created_at: str
+    completed_at: str | None
 
 
 def _atomic_write(path: Path, content: str) -> None:
@@ -40,11 +40,11 @@ def _atomic_write(path: Path, content: str) -> None:
 def _item(todo_id: str, title: str) -> _TodoFixture:
     """构造一条符合契约的待办记录。"""
     return {
-        "Id": todo_id,
-        "Title": title,
-        "IsCompleted": False,
-        "CreatedAt": "2026-08-12T08:00:00+08:00",
-        "CompletedAt": None,
+        "id": todo_id,
+        "title": title,
+        "is_completed": False,
+        "created_at": "2026-08-12T08:00:00+08:00",
+        "completed_at": None,
     }
 
 
@@ -74,7 +74,7 @@ def client(data_dir: Path):
 
 
 def test_meta_returns_valid_shape(client, data_dir) -> None:
-    """应返回 200：date 为 yyyy-MM-dd，createdAt 为可解析的 ISO8601 UTC，count 为整数。"""
+    """应返回 200：date 为 yyyy-MM-dd，created_at 为可解析的 ISO8601 UTC，count 为整数。"""
     # Given: 空数据目录（无 todo.json、无侧车）
 
     # When: 请求元数据
@@ -84,29 +84,29 @@ def test_meta_returns_valid_shape(client, data_dir) -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", body["date"])
-    assert body["createdAt"].endswith("Z") or body["createdAt"].endswith("+00:00")
-    created_at = datetime.fromisoformat(body["createdAt"])
+    assert body["created_at"].endswith("Z") or body["created_at"].endswith("+00:00")
+    created_at = datetime.fromisoformat(body["created_at"])
     assert created_at.tzinfo is not None
     assert isinstance(body["count"], int)
 
 
-def test_todo_echoes_pascalcase_verbatim(client, data_dir) -> None:
-    """应 200 返回数组，逐字回显 PascalCase 字段；无 HasSynced，CompletedAt 为 null。"""
-    # Given: 写入含精确 PascalCase 键的 todo.json
+def test_todo_echoes_snake_case_verbatim(client, data_dir) -> None:
+    """应 200 返回数组，逐字回显 snake_case 字段；无 has_synced，completed_at 为 null。"""
+    # Given: 写入含精确 snake_case 键的 todo.json
     items: list[_TodoFixture] = [
         {
-            "Id": "5f2f0d9e-4f6f-4f3e-9a3e-1234567890ab",
-            "Title": "写周报",
-            "IsCompleted": False,
-            "CreatedAt": "2026-08-12T08:00:00+08:00",
-            "CompletedAt": None,
+            "id": "5f2f0d9e-4f6f-4f3e-9a3e-1234567890ab",
+            "title": "写周报",
+            "is_completed": False,
+            "created_at": "2026-08-12T08:00:00+08:00",
+            "completed_at": None,
         },
         {
-            "Id": "7c1a2b3c-0000-0000-0000-000000000001",
-            "Title": "买牛奶",
-            "IsCompleted": True,
-            "CreatedAt": "2026-08-12T09:00:00+08:00",
-            "CompletedAt": "2026-08-12T10:30:00+08:00",
+            "id": "7c1a2b3c-0000-0000-0000-000000000001",
+            "title": "买牛奶",
+            "is_completed": True,
+            "created_at": "2026-08-12T09:00:00+08:00",
+            "completed_at": "2026-08-12T10:30:00+08:00",
         },
     ]
     _atomic_write(data_dir / "todo.json", json.dumps(items, ensure_ascii=False))
@@ -114,13 +114,13 @@ def test_todo_echoes_pascalcase_verbatim(client, data_dir) -> None:
     # When: 请求待办列表
     resp = client.get("/api/todo")
 
-    # Then: 与写入值逐字一致，键名恰为五个 PascalCase 字段
+    # Then: 与写入值逐字一致，键名恰为五个 snake_case 字段
     assert resp.status_code == 200
     assert resp.json() == items
     for item in resp.json():
-        assert set(item.keys()) == {"Id", "Title", "IsCompleted", "CreatedAt", "CompletedAt"}
-        assert "HasSynced" not in item
-    assert resp.json()[0]["CompletedAt"] is None
+        assert set(item.keys()) == {"id", "title", "is_completed", "created_at", "completed_at"}
+        assert "has_synced" not in item
+    assert resp.json()[0]["completed_at"] is None
 
 
 def test_todo_empty_and_meta_count_zero_without_file(client, data_dir) -> None:
@@ -195,14 +195,14 @@ def test_meta_sidecar_non_object_returns_json_500(client, data_dir) -> None:
 
 
 def test_created_at_survives_webhook_edit_but_stamp_changes_it(client, data_dir) -> None:
-    """webhook 式编辑后 createdAt 不变（count 增加）；todo_meta_stamp 运行后 createdAt 改变。"""
+    """webhook 式编辑后 created_at 不变（count 增加）；todo_meta_stamp 运行后 created_at 改变。"""
     # Given: 初始 todo.json 与侧车
     _atomic_write(
         data_dir / "todo.json",
         json.dumps([_item("1", "买牛奶")], ensure_ascii=False),
     )
     meta_before = client.get("/api/todo/meta").json()
-    created_before = meta_before["createdAt"]
+    created_before = meta_before["created_at"]
 
     # When: 模拟 webhook 编辑（追加一条）后请求 meta
     _atomic_write(
@@ -211,8 +211,8 @@ def test_created_at_survives_webhook_edit_but_stamp_changes_it(client, data_dir)
     )
     meta_after_edit = client.get("/api/todo/meta").json()
 
-    # Then: createdAt 不变，count 增加
-    assert meta_after_edit["createdAt"] == created_before
+    # Then: created_at 不变，count 增加
+    assert meta_after_edit["created_at"] == created_before
     assert meta_after_edit["count"] == meta_before["count"] + 1
 
     # When: 调用插件工具 todo_meta_stamp（MASHIRU_DATA_DIR 已由 fixture 指向临时目录）
@@ -223,9 +223,9 @@ def test_created_at_survives_webhook_edit_but_stamp_changes_it(client, data_dir)
     stamp_result = json.loads(todo_meta_stamp({}))
     assert stamp_result["success"] is True
 
-    # Then: createdAt 已改变且为合法 UTC，date 为今日，count 匹配实时条数
+    # Then: created_at 已改变且为合法 UTC，date 为今日，count 匹配实时条数
     meta_after_stamp = client.get("/api/todo/meta").json()
-    assert meta_after_stamp["createdAt"] != created_before
+    assert meta_after_stamp["created_at"] != created_before
     assert meta_after_stamp["date"] == datetime.now().strftime("%Y-%m-%d")
     assert meta_after_stamp["count"] == 2
 

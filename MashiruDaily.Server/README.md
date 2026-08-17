@@ -6,7 +6,7 @@
 
 MashiruDaily.Server 是一个轻量 Python 后端，承担两个职责：一是**拉取服务器**，以 FastAPI 提供两个只读 GET 端点，供 MashiruDaily 客户端（Avalonia 桌面 / Android / TUI）上线时拉取权威当日待办列表；二是**Hermes 装配工具集**，一键把本机安装的 Hermes Agent 配置为可接收 webhook、每日维护 todo.json 的智能体（示例 skill、每日 cron、物理开机自启）。
 
-数据位于 `data/`：`todo.json`（PascalCase 字段）是服务器侧唯一数据源，`todo-meta.json` 是侧车文件，专为客户端拉取决策记录 `createdAt`。服务器对数据只读，真正的写者是 Hermes Agent（每日 cron 例行更新 + webhook 事件即时更新）。
+数据位于 `data/`：`todo.json`（snake_case 字段）是服务器侧唯一数据源，`todo-meta.json` 是侧车文件，专为客户端拉取决策记录 `created_at`。服务器对数据只读，真正的写者是 Hermes Agent（每日 cron 例行更新 + webhook 事件即时更新）。
 
 同步拓扑（权威契约见 `docs/design/通信协议.md`）：
 
@@ -97,7 +97,7 @@ curl http://localhost:8123/api/todo/meta
 curl http://localhost:8123/api/todo
 ```
 
-`/health` 返回存活状态；`/api/todo/meta` 返回 `{date, createdAt, count}`；`/api/todo` 返回 PascalCase 待办数组。Windows PowerShell 中 `curl` 是 Invoke-WebRequest 别名，装了 curl.exe 可改用 `curl.exe`。默认监听 `0.0.0.0:8123`，可用环境变量 `MASHIRU_HOST` / `MASHIRU_PORT` / `MASHIRU_DATA_DIR` 覆盖。
+`/health` 返回存活状态；`/api/todo/meta` 返回 `{date, created_at, count}`；`/api/todo` 返回 snake_case 待办数组。Windows PowerShell 中 `curl` 是 Invoke-WebRequest 别名，装了 curl.exe 可改用 `curl.exe`。默认监听 `0.0.0.0:8123`，可用环境变量 `MASHIRU_HOST` / `MASHIRU_PORT` / `MASHIRU_DATA_DIR` 覆盖。
 
 **第四步：装配 Hermes**，按第 5 节顺序执行 register_hermes_plugin → configure_webhook → configure_cron。
 
@@ -138,7 +138,7 @@ $env:MASHIRU_WEBHOOK_SECRET = "<密钥>"
 .venv\Scripts\python.exe configure_webhook.py
 ```
 
-**configure_cron.py**：创建每日 Hermes cron 任务 `mashiru-daily`（默认每日 09:00，表达式 `0 9 * * *`）。提示词要求 Hermes 使用 `todo_*` 工具检查并更新 `data/todo.json` 与 `data/plan.md`，每次运行结束时调用 `todo_meta_stamp` 刷新 createdAt；创建命令附带 `--skill mashiru-todo`。已存在则跳过。可选 `--name`、`--schedule`、`--workdir`：
+**configure_cron.py**：创建每日 Hermes cron 任务 `mashiru-daily`（默认每日 09:00，表达式 `0 9 * * *`）。提示词要求 Hermes 使用 `todo_*` 工具检查并更新 `data/todo.json` 与 `data/plan.md`，每次运行结束时调用 `todo_meta_stamp` 刷新 created_at；创建命令附带 `--skill mashiru-todo`。已存在则跳过。可选 `--name`、`--schedule`、`--workdir`：
 
 ```powershell
 .venv\Scripts\python.exe configure_cron.py
@@ -173,47 +173,47 @@ sudo .venv/bin/python install_autostart.py --uninstall     # 删除自启
 .venv/bin/python install_autostart.py --dry-run            # 演练：只打印命令不执行（无需 sudo）
 ```
 
-## 6. createdAt 语义（重要）
+## 6. created_at 语义（重要）
 
-`todo-meta.json` 的 `createdAt` 是客户端判定「是否需要拉取」的主字段（协议 5.1、5.3）：
+`todo-meta.json` 的 `created_at` 是客户端判定「是否需要拉取」的主字段（协议 5.1、5.3）：
 
-- `createdAt` **只在 Hermes 插件工具 `todo_meta_stamp` 运行时改变**。运行时机仅两处：`setup_server.py` 首次引导，以及每日 cron agent 每次运行结束时（configure_cron.py 的提示词已内建该步骤）。
-- **webhook 驱动的 `todo.json` 修改绝不改变 `createdAt`**。Hermes 收到 webhook 后应使用 `todo_*` 工具更新 `todo.json`，但**禁止调用 `todo_meta_stamp`**，也不要直接编辑侧车。否则客户端每次 webhook 同步后都会因时间戳更新而误判「需要拉取」，造成无谓的全量拉取。
+- `created_at` **只在 Hermes 插件工具 `todo_meta_stamp` 运行时改变**。运行时机仅两处：`setup_server.py` 首次引导，以及每日 cron agent 每次运行结束时（configure_cron.py 的提示词已内建该步骤）。
+- **webhook 驱动的 `todo.json` 修改绝不改变 `created_at`**。Hermes 收到 webhook 后应使用 `todo_*` 工具更新 `todo.json`，但**禁止调用 `todo_meta_stamp`**，也不要直接编辑侧车。否则客户端每次 webhook 同步后都会因时间戳更新而误判「需要拉取」，造成无谓的全量拉取。
 - `count` 始终是实时值：`GET /api/todo/meta` 返回前取 `len(todo.json)`，侧车里的旧 count 不参与。
 
 ## 7. 数据文件
 
-**`data/todo.json`**：PascalCase，与客户端本地 `todos.json` 字段完全一致，**不含 `HasSynced`**（客户端本地字段，禁止传输）：
+**`data/todo.json`**：snake_case，与客户端本地 `todos.json` 字段完全一致，**不含 `has_synced`**（客户端本地字段，禁止传输）：
 
 ```json
 [
   {
-    "Id": "22222222-2222-2222-2222-222222222222",
-    "Title": "买菜",
-    "IsCompleted": true,
-    "CreatedAt": "2026-08-10T09:00:00+08:00",
-    "CompletedAt": "2026-08-10T11:30:00+08:00"
+    "id": "22222222-2222-2222-2222-222222222222",
+    "title": "买菜",
+    "is_completed": true,
+    "created_at": "2026-08-10T09:00:00+08:00",
+    "completed_at": "2026-08-10T11:30:00+08:00"
   }
 ]
 ```
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| `Id` | string (GUID) | 条目唯一标识 |
-| `Title` | string | 标题 |
-| `IsCompleted` | bool | 是否已完成 |
-| `CreatedAt` | string (ISO 8601) | 创建时间 |
-| `CompletedAt` | string (ISO 8601) 或 null | 完成时间，未完成时为 null |
+| `id` | string (GUID) | 条目唯一标识 |
+| `title` | string | 标题 |
+| `is_completed` | bool | 是否已完成 |
+| `created_at` | string (ISO 8601) | 创建时间 |
+| `completed_at` | string (ISO 8601) 或 null | 完成时间，未完成时为 null |
 
 `todo_save` 在覆盖写入前会自动把旧 `todo.json` 存档到 `data/backups/todo-<时间戳>-<随机后缀>.json`。
 
 **`data/todo-meta.json`**：恰好三个字段：
 
 ```json
-{ "date": "2026-08-10", "createdAt": "2026-08-10T09:00:00Z", "count": 12 }
+{ "date": "2026-08-10", "created_at": "2026-08-10T09:00:00Z", "count": 12 }
 ```
 
-`date` 为当日日期（yyyy-MM-dd，兼容保留）；`createdAt` 为 ISO 8601 UTC（Z 结尾，兼容 C# 端 AssumeUniversal 解析）；`count` 为实时条数。
+`date` 为当日日期（yyyy-MM-dd，兼容保留）；`created_at` 为 ISO 8601 UTC（Z 结尾，兼容 C# 端 AssumeUniversal 解析）；`count` 为实时条数。
 
 **`data/plan.md`**：每日计划，由 Hermes Agent 维护。边界行为：`todo.json` 缺失时 `GET /api/todo` 返回空数组，非法 JSON 返回 500；侧车缺失时首次请求 meta 自动创建。
 
@@ -225,7 +225,7 @@ sudo .venv/bin/python install_autostart.py --uninstall     # 删除自启
 pytest MashiruDaily.Server/tests -v
 ```
 
-覆盖：meta 结构合法、`GET /api/todo` 逐字回显 PascalCase 且无 `HasSynced`、空目录返回空数组、首次请求自动建侧车、非法 JSON 返回 500、webhook 式编辑不改 createdAt 而 stamp 会改、count 实时反映条数，以及 `hermes_plugin` 的 `todo_*` 工具读写/upsert/completed/delete/stamp 行为。已全部通过。
+覆盖：meta 结构合法、`GET /api/todo` 逐字回显 snake_case 且无 `has_synced`、空目录返回空数组、首次请求自动建侧车、非法 JSON 返回 500、webhook 式编辑不改 created_at 而 stamp 会改、count 实时反映条数，以及 `hermes_plugin` 的 `todo_*` 工具读写/upsert/completed/delete/stamp 行为。已全部通过。
 
 另可运行 `tools/test_webhook_signed.py` 做端到端冒烟：向 Hermes 网关 `:8644/webhooks/todo-sync` 发送签名事件（`--secret` 必填），2xx 即成功；`--negative` 用错误密钥验证网关返回 401。
 

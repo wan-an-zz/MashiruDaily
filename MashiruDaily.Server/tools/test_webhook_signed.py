@@ -6,7 +6,7 @@
 - 向 POST {HermesBaseUrl}/webhooks/todo-sync 发送一个 todo_added 事件；
 - 请求头携带 X-Webhook-Timestamp（Unix 秒）、X-Webhook-Signature-V2
   （对 "{timestamp}.{rawBody}" 的 UTF-8 字节计算小写十六进制 HMAC-SHA256，
-  与 C# 客户端 HermesWebhookSigner 完全一致）、X-Request-ID（与事件体 eventId 相同）；
+  与 C# 客户端 HermesWebhookSigner 完全一致）、X-Request-ID（与事件体 event_id 相同）；
 - 2xx 视为接受成功，非 2xx 视为失败（退出码 1）；
 - --negative 模式下额外用错误密钥发送一次，验证网关返回 401（签名强制校验）。
 
@@ -36,31 +36,31 @@ PULL_TODO_URL = "http://localhost:8123/api/todo"
 # 单次 HTTP 请求超时（与客户端默认 TimeoutSeconds=10 一致）
 TIMEOUT_SECONDS = 10
 
-# 固定的测试客户端标识（协议要求 clientId 为每台设备固定的 UUID）
+# 固定的测试客户端标识（协议要求 client_id 为每台设备固定的 UUID）
 TEST_CLIENT_ID = "00000000-0000-0000-0000-000000000001"
 
 
 def build_event() -> tuple[str, bytes]:
     """构造 todo_added 事件体，返回 (event_id, 原始请求字节)。
 
-    - eventId 为新的 uuid4（与 X-Request-ID 保持一致）；
-    - 事件体字段为 camelCase（id/title/isCompleted/createdAt/completedAt），
-      payload 不含 HasSynced（客户端本地字段，禁止传输）；
+    - event_id 为新的 uuid4（与 X-Request-ID 保持一致）；
+    - 事件体字段为 snake_case（id/title/is_completed/created_at/completed_at），
+      payload 不含 has_synced（客户端本地字段，禁止传输）；
     - 使用紧凑 JSON（separators=(",", ":")），ensure_ascii=False 以保留中文。
     """
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     event_id = str(uuid.uuid4())
     event = {
         "type": "todo_added",
-        "clientId": TEST_CLIENT_ID,
-        "eventId": event_id,
+        "client_id": TEST_CLIENT_ID,
+        "event_id": event_id,
         "timestamp": now,
         "payload": {
             "id": str(uuid.uuid4()),
             "title": f"Webhook 冒烟测试 {now}",
-            "isCompleted": False,
-            "createdAt": now,
-            "completedAt": None,
+            "is_completed": False,
+            "created_at": now,
+            "completed_at": None,
         },
     }
     raw_body = json.dumps(event, ensure_ascii=False, separators=(",", ":")).encode("utf-8")

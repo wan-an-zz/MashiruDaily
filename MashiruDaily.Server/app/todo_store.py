@@ -10,20 +10,20 @@ from app.config import get_settings
 
 
 class TodoRecord(TypedDict):
-    """todo.json 中的单条待办（PascalCase，与 C# 端 System.Text.Json 反序列化对齐）。"""
+    """todo.json 中的单条待办（snake_case，与 C# 端 System.Text.Json 反序列化对齐）。"""
 
-    Id: str
-    Title: str
-    IsCompleted: bool
-    CreatedAt: str
-    CompletedAt: str | None
+    id: str
+    title: str
+    is_completed: bool
+    created_at: str
+    completed_at: str | None
 
 
 class TodoMeta(TypedDict):
-    """todo-meta.json 侧车结构：恰好 date / createdAt / count 三个字段，不多不少。"""
+    """todo-meta.json 侧车结构：恰好 date / created_at / count 三个字段，不多不少。"""
 
     date: str
-    createdAt: str
+    created_at: str
     count: int
 
 
@@ -63,15 +63,15 @@ def load_todo_list() -> list[TodoRecord]:
 
 
 def _read_meta(path: Path) -> TodoMeta:
-    """读取已存在的侧车文件；JSON 非法或结构不符合 {date, createdAt, count} 抛 ValueError。"""
+    """读取已存在的侧车文件；JSON 非法或结构不符合 {date, created_at, count} 抛 ValueError。"""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise ValueError(f"todo-meta.json 解析失败（{path}）：{exc}") from exc
     # 形状校验：手改或旧版本写入的侧车若缺键，后续 current_meta 会抛 KeyError，
     # 与其余路径的 ValueError→500 JSON 不一致，这里统一为明确的 ValueError。
-    if not isinstance(data, dict) or not {"date", "createdAt", "count"}.issubset(data):
-        raise ValueError(f"todo-meta.json 结构不合法（{path}）：需要 date/createdAt/count 三键")
+    if not isinstance(data, dict) or not {"date", "created_at", "count"}.issubset(data):
+        raise ValueError(f"todo-meta.json 结构不合法（{path}）：需要 date/created_at/count 三键")
     return data
 
 
@@ -86,14 +86,14 @@ def _write_meta_atomic(path: Path, meta: TodoMeta) -> None:
 
 
 def load_or_init_meta() -> TodoMeta:
-    """读取侧车；缺失时按当前数据初始化（date=今日、createdAt=当前 UTC、count=实时条数）
+    """读取侧车；缺失时按当前数据初始化（date=今日、created_at=当前 UTC、count=实时条数）
     并原子写入后返回。已存在的侧车绝不覆盖。"""
     path = _meta_json_path()
     if path.exists():
         return _read_meta(path)
     meta: TodoMeta = {
         "date": _today_local(),
-        "createdAt": _now_utc_iso(),
+        "created_at": _now_utc_iso(),
         "count": len(load_todo_list()),
     }
     _write_meta_atomic(path, meta)
@@ -101,11 +101,11 @@ def load_or_init_meta() -> TodoMeta:
 
 
 def current_meta() -> TodoMeta:
-    """返回当前元数据：date / createdAt 原样透传侧车，count 始终取 todo.json 实时长度；
+    """返回当前元数据：date / created_at 原样透传侧车，count 始终取 todo.json 实时长度；
     只读，绝不修改侧车。"""
     meta = load_or_init_meta()
     return {
         "date": meta["date"],
-        "createdAt": meta["createdAt"],
+        "created_at": meta["created_at"],
         "count": len(load_todo_list()),
     }

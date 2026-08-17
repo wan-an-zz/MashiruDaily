@@ -76,7 +76,7 @@ id: 30c27205-…
 1. **解析**：`event_type `为 `todo_completed`，`id`为 `30c27205-…`, `title` 为 `数学｜模块6·类型2 抽象函数 必刷一百讲`。
 2. **查映射表**：`todo_completed` 使用 TODO_COMPLETED工具，参数 `id` + `completed: true`。
 3. **调用**：`todo_completed({"id": "30c27205-ff93-4a80-b0cf-0f47645af157", "completed": true})`。
-4. **校验**：`todo_get({"id": "30c27205-…"})` 复查 → `IsCompleted: true`，`CompletedAt` 已由程序生成（UTC，Z 结尾）。完成。✅
+4. **校验**：`todo_get({"id": "30c27205-…"})` 复查 → `is_completed: true`，`completed_at` 已由程序生成（UTC，Z 结尾）。完成。✅
 
 ## 陷阱与注意事项
 

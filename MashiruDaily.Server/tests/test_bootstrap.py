@@ -110,9 +110,9 @@ def _monkey_urlopen(monkeypatch, responses: dict):
 
 
 def _valid_meta_body() -> bytes:
-    """构造合法的 /api/todo/meta 响应体（含 createdAt）。"""
+    """构造合法的 /api/todo/meta 响应体（含 created_at）。"""
     return json.dumps(
-        {"date": "2026-08-14", "createdAt": "2026-08-14T01:00:00Z", "count": 0}
+        {"date": "2026-08-14", "created_at": "2026-08-14T01:00:00Z", "count": 0}
     ).encode("utf-8")
 
 
@@ -422,7 +422,7 @@ def test_verify_reuses_existing_server(monkeypatch) -> None:
 
 
 def test_verify_bad_meta_returns_one(monkeypatch) -> None:
-    """meta 200 但缺少 createdAt → 返回 1。"""
+    """meta 200 但缺少 created_at → 返回 1。"""
     monkeypatch.setattr("bootstrap.os.name", "posix")
     responses = {
         "http://127.0.0.1:8123/health": _FakeHttpResponse(b'{"status":"ok"}'),
