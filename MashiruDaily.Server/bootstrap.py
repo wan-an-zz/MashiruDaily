@@ -9,7 +9,7 @@ install_autostart → 启动验证（/health 与 /api/todo/meta）。任一环�
     python bootstrap.py --secret <密钥>                    # 完整初始化
     python bootstrap.py --dry-run --secret <密钥>          # 演练：只打印命令
 
-webhook 密钥经环境变量 MASHIRU_WEBHOOK_SECRET 注入子进程，绝不出现于命令行；也可直接用环境变量提供。
+webhook 密钥经环境变量 MASHIRU_WEBHOOK_SECRET 注入子进程
 """
 
 import argparse

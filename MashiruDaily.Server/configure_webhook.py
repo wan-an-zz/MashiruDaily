@@ -119,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
     secret = (args.secret or os.environ.get("MASHIRU_WEBHOOK_SECRET") or "").strip()
     if not secret:
         print("错误：缺少 webhook 密钥。", file=sys.stderr)
-        print("请通过 --secret <密钥> 或环境变量 MASHIRU_WEBHOOK_SECRET 提供，禁止硬编码或交互输入。", file=sys.stderr)
+        print("请通过 --secret <密钥> 或修改环境变量 MASHIRU_WEBHOOK_SECRET 提供", file=sys.stderr)
         return 1
 
     yaml_obj = _config.new_yaml()  # 内部已确保 ruamel.yaml 可用
@@ -129,27 +129,18 @@ def main(argv: list[str] | None = None) -> int:
         print("请确认 Hermes Agent 已安装，或设置环境变量 HERMES_HOME 指向其主目录。", file=sys.stderr)
         return 1
 
-    # 构造期望的 todo-sync 路由（prompt 引用服务器数据文件，使用 {__raw__} 模板 token；
-    # toolsets 声明本路由允许 Hermes 调用 mashiru_daily 工具集中的 todo_* 工具）
-    server_root = Path(__file__).resolve().parent
-    todo_json = _config.forward_slashes(server_root / "data" / "todo.json")
-    plan_md = _config.forward_slashes(server_root / "data" / "plan.md")
+    # 构造 todo-sync 路由
     prompt_text = (
-        f"收到 Todo 变更事件：\n{{__raw__}}\n\n"
-        f"请使用 Hermes 插件 mashiru-daily 提供的 todo_* 工具更新 {todo_json}"
-        f"（PascalCase 字段 Id/Title/IsCompleted/CreatedAt/CompletedAt，禁止传输 HasSynced）："
-        f"todo_added 用 todo_upsert 只传 title；todo_updated 用 todo_upsert（已存在 Id 则传 id+title，"
-        f"不存在则只传 title 新增）；todo_completed/todo_reopened 用 todo_completed 传 id+completed；"
-        f"todo_deleted 用 todo_delete。Id/CreatedAt/CompletedAt 由程序生成或维护，不要自行编造。"
-        f"必要时同步 {plan_md}。"
-        f"这是 webhook 驱动的小改动，禁止调用 todo_meta_stamp，也不要直接编辑 todo-meta.json。"
-        f"完成后无需报告。"
+        "sync this todo change to todo.json:"
+        "event_type: {event_type}"
+        "id: {payload.id}"
+        "title: {payload.title}"
     )
     desired_todo_sync = {
         "events": TODO_SYNC_EVENTS,
         "secret": secret,
         "prompt": _literal_scalar(prompt_text),
-        "skills": ["mashiru-todo"],
+        "skills": ["webhook-todo-sync"],
         "toolsets": ["mashiru_daily"],
     }
 
@@ -207,7 +198,7 @@ def main(argv: list[str] | None = None) -> int:
     print("\n当前 platforms.webhook 配置：")
     _print_webhook_block(platforms["webhook"])
 
-    # 重启网关（webhook 变更需重启生效；网关作为计划任务运行，重启会短暂断开连接）
+    # 重启网关
     if args.no_restart:
         hermes = _config.find_hermes_exe()
         restart_cmd = "hermes gateway restart" if hermes is None else f"{hermes} gateway restart"
@@ -246,16 +237,14 @@ def _restart_gateway(hermes: str) -> int:
     # print_error 写 stdout）。
     combined = (result.stderr or "") + (result.stdout or "")
     if _ROOT_REFUSAL_SIGNAL in combined or _USER_SYSTEMD_UNAVAILABLE_SIGNAL in combined:
-        # 降级是成功路径（配置已写入、仅重启未执行），提示走 stdout，
-        # 与 --no-restart 分支的输出语义一致。
         print("[WARN] Hermes 拒绝在 root 下重启网关，webhook 配置已写入 config.yaml，")
         print("将在 Hermes 下次重启时生效。本次未执行重启；可手动重启或等待下次重启。")
         if _ROOT_REFUSAL_SIGNAL in combined:
-            print("修复建议：从普通用户终端运行 `sudo hermes gateway restart`，")
+            print("修复建议：运行 `sudo hermes gateway restart`，")
             print("或 `sudo systemctl restart hermes-gateway.service`。")
         else:
             print("修复建议：以 Hermes 所属用户执行 `hermes gateway restart`")
-            print("（无登录会话先 `sudo loginctl enable-linger <用户>`），或前台 `hermes gateway run`。")
+            print("（若未登录先 `sudo loginctl enable-linger <用户>`）或 `hermes gateway run`。")
         if combined.strip():
             print("\nHermes 输出：")
             print(combined.strip())

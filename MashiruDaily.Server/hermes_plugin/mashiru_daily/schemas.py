@@ -1,10 +1,4 @@
-"""Hermes 插件工具 Schema：这些描述是 LLM 判断何时调用工具的依据。
-
-所有工具都围绕 MashiruDaily.Server 的 data/todo.json 与 data/todo-meta.json：
-- todo.json：PascalCase 待办数组，是服务器侧唯一数据源；
-- todo-meta.json：侧车文件，createdAt 只能由 todo_meta_stamp 工具（或等价脚本）
-  刷新，webhook 驱动的修改不得触碰。
-- 已有条目时可传入已存在的 Id 用于定位。
+"""Hermes 插件工具 Schema
 """
 
 TODO_LIST = {

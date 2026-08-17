@@ -1,7 +1,5 @@
 """注册/管理 MashiruDailyServer（拉取服务器）的【物理开机自启】（幂等，跨平台）。
 
-语义：系统启动即运行，不依赖任何用户登录（登录自启不满足本需求）。
-
 平台分派：
 - Windows：schtasks /SC ONSTART + /RU SYSTEM（系统启动即触发、无需登录，SYSTEM 账户免密码）。
   需要管理员权限；脚本在非管理员 + 非 --dry-run 时自动以 UAC 提权重启自身。

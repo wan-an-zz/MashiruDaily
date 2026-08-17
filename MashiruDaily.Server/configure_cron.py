@@ -47,9 +47,6 @@ def main() -> int:
         print("或将其加入 PATH，或设置 HERMES_HOME 环境变量。", file=sys.stderr)
         return 1
 
-    server_root = Path(__file__).resolve().parent
-    workdir = _config.forward_slashes(Path(args.workdir) if args.workdir else server_root)
-
     # 步骤 1：查询现有任务（幂等检查）
     print(f"运行: {subprocess.list2cmdline([hermes, 'cron', 'list'])}")
     result = _run_cmd([hermes, "cron", "list"], timeout=60)
@@ -67,25 +64,15 @@ def main() -> int:
         print(f"[SKIP] cron 任务 {args.name} 已存在，跳过。")
         return 0
 
-    # 构造占位提示词（后续由用户替换，自包含、可独立执行）
-    todo_json = _config.forward_slashes(server_root / "data" / "todo.json")
-    plan_md = _config.forward_slashes(server_root / "data" / "plan.md")
+    # 构造提示词
     prompt = (
-        f"这是每日例行任务（当前为占位提示词，之后可替换）。"
-        f"请使用 Hermes 插件 mashiru-daily 提供的 todo_* 工具维护 {todo_json}"
-        f"（PascalCase 字段 Id/Title/IsCompleted/CreatedAt/CompletedAt，禁止传输 HasSynced）："
-        f"先用 todo_list 读取当前待办，必要时用 todo_save 传 Title 数组整体重建，"
-        f"或用 todo_upsert / todo_completed / todo_delete 做增量修正；"
-        f"Id/CreatedAt/CompletedAt 由程序生成或维护，不要自行编造。"
-        f"按需更新 {plan_md}。"
-        f"每日例行维护结束时必须调用 todo_meta_stamp，以刷新数据元信息 createdAt。"
-        f"若今日没有需要处理的事项，回复 [SILENT]。"
+        "你是一个根据**已制定的计划**为用户分配当日任务的**任务分配者**。遵循todo-assigning skill的步骤，修改todo.json，为用户分配任务"
     )
 
     # 步骤 2：创建任务
     create_cmd = [
         hermes, "cron", "create", args.schedule, prompt,
-        "--name", args.name, "--workdir", workdir, "--skill", "mashiru-todo",
+        "--name", args.name, "--skill", "todo-assigning",
     ]
     print(f"\n运行: {subprocess.list2cmdline(create_cmd)}")
     result = _run_cmd(create_cmd, timeout=120)
@@ -105,7 +92,6 @@ def main() -> int:
         print(result.stderr.strip() or result.stdout.strip(), file=sys.stderr)
     else:
         print((result.stdout or "").strip())
-    print("\n提示：当前提示词为占位内容，请按需替换（例如通过 hermes cron 修改或编辑 HERMES_HOME/cron/jobs.json）。")
     return 0
 
 
