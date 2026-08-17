@@ -1,7 +1,7 @@
 """MashiruDaily.Server 一键初始化程序（bootstrap.py，推荐入口）。
 
 用系统 Python（纯标准库，无第三方依赖）按序串联六个幂等子脚本：
-setup_server → register_skills → configure_webhook → configure_cron →
+setup_server → register_hermes_plugin → configure_webhook → configure_cron →
 install_autostart → 启动验证（/health 与 /api/todo/meta）。任一环节失败立即
 终止（fail-fast），各子脚本幂等、可重复运行。
 
@@ -185,7 +185,7 @@ def main(argv: list[str] | None = None) -> int:
         help="webhook 密钥（也可用环境变量 MASHIRU_WEBHOOK_SECRET 提供）",
     )
     parser.add_argument("--skip-setup", action="store_true", help="跳过步骤 1：setup_server.py")
-    parser.add_argument("--skip-skills", action="store_true", help="跳过步骤 2：register_skills.py")
+    parser.add_argument("--skip-skills", action="store_true", help="跳过步骤 2：register_hermes_plugin.py")
     parser.add_argument("--skip-webhook", action="store_true", help="跳过步骤 3：configure_webhook.py")
     parser.add_argument("--skip-cron", action="store_true", help="跳过步骤 4：configure_cron.py")
     parser.add_argument("--skip-autostart", action="store_true", help="跳过步骤 5：install_autostart.py")
@@ -219,18 +219,18 @@ def main(argv: list[str] | None = None) -> int:
             return rc
         print("[OK] setup_server.py 完成。")
 
-    # 步骤 2/6：register_skills.py（用 venv python 运行）
-    print("\n[2/6] 注册 Hermes 插件与 skills（register_skills.py）")
+    # 步骤 2/6：register_hermes_plugin.py（用 venv python 运行）
+    print("\n[2/6] 注册 Hermes 插件与 skills（register_hermes_plugin.py）")
     if args.skip_skills:
         print("[SKIP] 已跳过（--skip-skills）。")
     elif not _check_venv_python(venv_py):
         return 1
     else:
-        rc = _execute([str(venv_py), "register_skills.py"], dry_run=args.dry_run)
+        rc = _execute([str(venv_py), "register_hermes_plugin.py"], dry_run=args.dry_run)
         if rc != 0:
-            print(f"[FAIL] register_skills.py 失败（退出码 {rc}）。", file=sys.stderr)
+            print(f"[FAIL] register_hermes_plugin.py 失败（退出码 {rc}）。", file=sys.stderr)
             return rc
-        print("[OK] register_skills.py 完成。")
+        print("[OK] register_hermes_plugin.py 完成。")
 
     # 步骤 3/6：configure_webhook.py（密钥经环境变量注入，绝不进命令行）
     print("\n[3/6] 配置 Hermes webhook 平台与 todo-sync 路由（configure_webhook.py）")

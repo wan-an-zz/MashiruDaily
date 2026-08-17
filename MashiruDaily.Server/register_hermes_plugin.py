@@ -10,7 +10,7 @@
   `Server/skills` 目录引用（若存在）。
 
 需 ruamel.yaml（由 setup_server.py 安装）。用法：
-    .venv\\Scripts\\python.exe register_skills.py
+    .venv\\Scripts\\python.exe register_hermes_plugin.py
 """
 
 import argparse

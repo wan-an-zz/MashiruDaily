@@ -37,7 +37,7 @@ MashiruDaily.Server/
 │   ├── test_hermes_plugin.py  hermes_plugin todo_* 工具离线测试
 │   └── ...
 ├── setup_server.py          一次性初始化：创建 .venv、安装依赖、初始化 data/、盖章初始 meta（幂等）
-├── register_skills.py       安装/链接 hermes_plugin 到 Hermes 并启用插件，注册外部 skill 目录（幂等）
+├── register_hermes_plugin.py       安装/链接 hermes_plugin 到 Hermes 并启用插件，注册外部 skill 目录（幂等）
 ├── configure_webhook.py     配置 Hermes webhook 平台与 todo-sync 路由（幂等，需密钥）
 ├── configure_cron.py        创建每日 Hermes cron 任务 mashiru-daily（幂等）
 ├── install_autostart.py     物理开机自启（Windows: schtasks ONSTART；Linux/macOS: systemd 系统服务/crontab）
@@ -48,7 +48,7 @@ MashiruDaily.Server/
 
 ## 3. 快速开始
 
-**一键初始化（推荐）**：`bootstrap.py` 一条命令按序串联全部开始流程：setup_server → register_skills → configure_webhook → configure_cron → install_autostart → 启动验证。任一环节失败立即停止（fail-fast）；各子脚本均幂等，可重复运行。用系统 Python 运行，纯标准库，无第三方依赖（与 `setup_server.py` 同款）：
+**一键初始化（推荐）**：`bootstrap.py` 一条命令按序串联全部开始流程：setup_server → register_hermes_plugin → configure_webhook → configure_cron → install_autostart → 启动验证。任一环节失败立即停止（fail-fast）；各子脚本均幂等，可重复运行。用系统 Python 运行，纯标准库，无第三方依赖（与 `setup_server.py` 同款）：
 
 ```powershell
 python bootstrap.py --secret <密钥>
@@ -99,7 +99,7 @@ curl http://localhost:8123/api/todo
 
 `/health` 返回存活状态；`/api/todo/meta` 返回 `{date, createdAt, count}`；`/api/todo` 返回 PascalCase 待办数组。Windows PowerShell 中 `curl` 是 Invoke-WebRequest 别名，装了 curl.exe 可改用 `curl.exe`。默认监听 `0.0.0.0:8123`，可用环境变量 `MASHIRU_HOST` / `MASHIRU_PORT` / `MASHIRU_DATA_DIR` 覆盖。
 
-**第四步：装配 Hermes**，按第 5 节顺序执行 register_skills → configure_webhook → configure_cron。
+**第四步：装配 Hermes**，按第 5 节顺序执行 register_hermes_plugin → configure_webhook → configure_cron。
 
 ## 4. 客户端设置对照表（重要）
 
@@ -116,12 +116,12 @@ curl http://localhost:8123/api/todo
 
 ## 5. 配置脚本用法
 
-四个脚本全部幂等，重复运行不产生改动。其中直接修改 `HERMES_HOME/config.yaml` 的两个（register_skills、configure_webhook）**只在真正修改前**备份为 `config.yaml.bak-<时间戳>`；configure_cron 走 `hermes cron` 命令、install_autostart 走注册表/systemd/crontab，不触碰 config.yaml。统一用 `.venv` 内的 Python 运行（改 config.yaml 的两个依赖 ruamel.yaml，必须如此）。Hermes 与 config.yaml 的定位：默认 `%LOCALAPPDATA%\hermes`，可用环境变量 `HERMES_HOME` 覆盖。
+四个脚本全部幂等，重复运行不产生改动。其中直接修改 `HERMES_HOME/config.yaml` 的两个（register_hermes_plugin、configure_webhook）**只在真正修改前**备份为 `config.yaml.bak-<时间戳>`；configure_cron 走 `hermes cron` 命令、install_autostart 走注册表/systemd/crontab，不触碰 config.yaml。统一用 `.venv` 内的 Python 运行（改 config.yaml 的两个依赖 ruamel.yaml，必须如此）。Hermes 与 config.yaml 的定位：默认 `%LOCALAPPDATA%\hermes`，可用环境变量 `HERMES_HOME` 覆盖。
 
-**register_skills.py**：把 `hermes_plugin/mashiru_daily/` 以目录链接安装到 `$HERMES_HOME/plugins/mashiru-daily`，通过 Hermes CLI（`hermes plugins enable`）启用插件；同时把 `hermes_plugin/mashiru_daily/skills` 写入 config.yaml 的 `skills.external_dirs`（不存在则创建，已包含则跳过，并迁移移除旧 `Server/skills` 引用）。插件内的 `register(ctx)` 负责通过 Hermes 接口注册全部 `todo_*` 工具与内置 skill：
+**register_hermes_plugin.py**：把 `hermes_plugin/mashiru_daily/` 以目录链接安装到 `$HERMES_HOME/plugins/mashiru-daily`，通过 Hermes CLI（`hermes plugins enable`）启用插件；同时把 `hermes_plugin/mashiru_daily/skills` 写入 config.yaml 的 `skills.external_dirs`（不存在则创建，已包含则跳过，并迁移移除旧 `Server/skills` 引用）。插件内的 `register(ctx)` 负责通过 Hermes 接口注册全部 `todo_*` 工具与内置 skill：
 
 ```powershell
-.venv\Scripts\python.exe register_skills.py
+.venv\Scripts\python.exe register_hermes_plugin.py
 ```
 
 **configure_webhook.py**：合并 `platforms.webhook = {enabled, extra:{port: 8644, routes:{todo-sync:{...}}}}` 到 config.yaml。路由通过 `toolsets: ["mashiru_daily"]` 声明 Hermes 可调用的插件工具集（`todo_*` 工具）。其它平台（如 qqbot）与既有路由一律保留，只覆盖 todo-sync。写入后校验，默认执行 `hermes gateway restart`（webhook 变更需重启生效，网关连接会短暂断开）。不想自动重启、只打印命令时加 `--no-restart`：

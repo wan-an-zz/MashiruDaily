@@ -102,7 +102,7 @@ def main() -> int:
         return 1
     print(f"[OK] 初始 sidecar 已生成（{stamp_result['meta']}）。")
 
-    print("\n[完成] 初始化成功。可继续运行 register_skills.py / configure_webhook.py / configure_cron.py / install_autostart.py。")
+    print("\n[完成] 初始化成功。可继续运行 register_hermes_plugin.py / configure_webhook.py / configure_cron.py / install_autostart.py。")
     return 0
 
 

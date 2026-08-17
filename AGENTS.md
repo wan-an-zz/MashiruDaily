@@ -25,7 +25,7 @@ Avalonia 12.1 cross-platform app (net10.0) using SukiUI theming, MVVM + DI, NLog
 - `MashiruDaily/`（Avalonia 共享项目）— 引用 Core；保留 UI 专属：`Models/NavigationItem`、`Abstracts/INavigationItem`、`ViewModels/MainViewModel`+`SettingsPageViewModel`、`Views/`（含 `Todo/TodoPageView`、`SettingsPageView`）、`Controls/`（`BottomNavigationBar*`、`SyncStatusBar`）、`Assets/`、`App.axaml*`。桌面/Android/Browser/iOS 都引用它。
 - `MashiruDaily.Tui/`（Terminal.Gui v2 控制台，Linux 可运行）— 引用 **Core**（不是 `MashiruDaily`，避免拖入 Avalonia）。`Program.cs`（DI + 生命周期）+ `Views/MainWindow`、`TodoColumnView`、`TodoRowView`。**先读 `MashiruDaily.Tui/AGENTS.md`**，里面是 Terminal.Gui v2 权威规范。
 - `MashiruDaily.Tests/`（xUnit）— 引用 Core 与 MashiruDaily。
-- `MashiruDaily.Server/` — Python 后端（FastAPI），**不是 .NET 项目、不在 slnx 里**，两职责：① 拉取服务器（只读 GET，默认监听 `0.0.0.0:8123`：`/health`、`/api/todo/meta`、`/api/todo`），数据源 `data/todo.json`；② Hermes 装配工具集（`bootstrap.py` 一键串联 setup_server → register_skills → configure_webhook → configure_cron → install_autostart）。**TDD**：先写契约测试（RED）再实现 `app/main.py` 转绿。运维手册就是它自己的 `README.md`，动手前先读；**代理规范见 `MashiruDaily.Server/AGENTS.md`**。关键纪律：`todo-meta.json` 的 `createdAt` **只在 Hermes 插件工具 `todo_meta_stamp` 运行时改变**（运行时机仅两处：`setup_server.py` 首次引导与每日 cron agent 结束，见其 `README.md` §6） —— webhook 驱动的 `todo.json` 修改绝不能碰侧车，否则客户端每次同步后都会因时间戳更新而误判「需要拉取」，造成无谓的全量拉取。
+- `MashiruDaily.Server/` — Python 后端（FastAPI），**不是 .NET 项目、不在 slnx 里**，两职责：① 拉取服务器（只读 GET，默认监听 `0.0.0.0:8123`：`/health`、`/api/todo/meta`、`/api/todo`），数据源 `data/todo.json`；② Hermes 装配工具集（`bootstrap.py` 一键串联 setup_server → register_hermes_plugin → configure_webhook → configure_cron → install_autostart）。**TDD**：先写契约测试（RED）再实现 `app/main.py` 转绿。运维手册就是它自己的 `README.md`，动手前先读；**代理规范见 `MashiruDaily.Server/AGENTS.md`**。关键纪律：`todo-meta.json` 的 `createdAt` **只在 Hermes 插件工具 `todo_meta_stamp` 运行时改变**（运行时机仅两处：`setup_server.py` 首次引导与每日 cron agent 结束，见其 `README.md` §6） —— webhook 驱动的 `todo.json` 修改绝不能碰侧车，否则客户端每次同步后都会因时间戳更新而误判「需要拉取」，造成无谓的全量拉取。
 - `HeadlessProbe/` — TUI 无头调试的临时探针工程，仓库里只剩 bin/obj 构建产物、已被 .gitignore 忽略、不在解决方案里；看到可忽略，别加进 slnx。
 - 三端共享同一后端与数据：都是 `TodoService` + `JsonTodoRepository`，落到 `%APPDATA%\MashiruDaily\todos.json`；同步设置经 `JsonHermesSettingsRepository` 落到同目录 `settings.json`。
 - **改同步相关代码前先读 `docs/design/通信协议.md`** — 与 Hermes 同步的权威契约（`docs/design/*` 被 .gitignore 忽略，仅放行 `通信协议.md` 与 `通信协议示例.json` 两个文件提交），端点/字段/默认值/语义以它为准，客户端实现不得偏离。
@@ -86,7 +86,7 @@ Avalonia 12.1 cross-platform app (net10.0) using SukiUI theming, MVVM + DI, NLog
 - **启动/关闭不得阻塞 UI 于网络**：`App.axaml.cs` 启动同步是即发即忘，关闭冲刷尽力而为（`IHermesSyncService.FlushAsync` 契约「绝不抛异常」）。
 - **Desktop 入口**：`Program.cs` 在 `AppMain` 前**不得使用任何 Avalonia/第三方 API 或依赖 SynchronizationContext 的代码**。
 - **服务端数据形状**：`todo.json` 顶层必须是 JSON 数组、`todo-meta.json` 键完整，否则统一抛 `ValueError` → 500 JSON `detail`（不许 KeyError 裸崩）。
-- **幂等脚本**：所有 `MashiruDaily.Server` 装配脚本幂等可重跑；改 `config.yaml` 前必须备份 `config.yaml.bak-<时间戳>`；`register_skills.py` 遇已存在插件目录**绝不覆盖**；cron 任务名判断要求词边界（防 `mashiru-daily-backup` 误判）。
+- **幂等脚本**：所有 `MashiruDaily.Server` 装配脚本幂等可重跑；改 `config.yaml` 前必须备份 `config.yaml.bak-<时间戳>`；`register_hermes_plugin.py` 遇已存在插件目录**绝不覆盖**；cron 任务名判断要求词边界（防 `mashiru-daily-backup` 误判）。
 
 ## Style
 

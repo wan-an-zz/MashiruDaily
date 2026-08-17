@@ -1,6 +1,6 @@
 """Hermes 配置共享工具（纯标准库）：路径解析、config.yaml 读写与备份、hermes 可执行文件定位。
 
-供 register_skills.py / configure_webhook.py / configure_cron.py 复用：
+供 register_hermes_plugin.py / configure_webhook.py / configure_cron.py 复用：
 - config.yaml 一律使用 ruamel.yaml 的 round-trip 模式读写，保留注释与格式；
 - 修改前按 config.yaml.bak-<时间戳> 规则备份，且仅在真正需要修改时备份。
 """

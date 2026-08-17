@@ -193,7 +193,7 @@ def test_each_skip_flag_suppresses_its_step(monkeypatch) -> None:
     bootstrap.main(["--skip-setup", "--skip-skills", "--skip-webhook",
                     "--skip-cron", "--skip-autostart", "--no-verify"])
     assert not any("setup_server.py" in c for c, _ in calls)
-    assert not any("register_skills.py" in c for c, _ in calls)
+    assert not any("register_hermes_plugin.py" in c for c, _ in calls)
     assert not any("configure_webhook.py" in c for c, _ in calls)
     assert not any("configure_cron.py" in c for c, _ in calls)
     assert not any("install_autostart.py" in c for c, _ in calls)
@@ -308,7 +308,7 @@ def test_dry_run_only_executes_autostart_with_flag(monkeypatch) -> None:
     assert len(autostart_calls) == 1
     assert "--dry-run" in autostart_calls[0]
     assert not any("setup_server.py" in c for c, _ in calls)
-    assert not any("register_skills.py" in c for c, _ in calls)
+    assert not any("register_hermes_plugin.py" in c for c, _ in calls)
     assert not any("configure_webhook.py" in c for c, _ in calls)
     assert not any("configure_cron.py" in c for c, _ in calls)
 
