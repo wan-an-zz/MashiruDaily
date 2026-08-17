@@ -4,10 +4,9 @@
   安装到 `$HERMES_HOME/plugins/mashiru-daily`，插件内的 `register(ctx)`
   会通过 Hermes 接口注册全部 `todo_*` 工具与内置 skill；
 - 通过 `hermes plugins enable mashiru-daily` 启用插件（Hermes 接口；
+  若 Hermes 询问是否授予特权，按提示输入 yes；
   找不到 hermes 可执行文件时回退为直接写 config.yaml 的 plugins.enabled）；
-- 把 `hermes_plugin/mashiru_daily/skills` 加入 `skills.external_dirs`，使普通技能名
-  `mashiru-todo` 可被 cron / webhook 的 `--skill` 直接使用；同时迁移移除旧
-  `Server/skills` 目录引用（若存在）。
+- 把 `hermes_plugin/mashiru_daily/skills` 加入 `skills.external_dirs`
 
 需 ruamel.yaml（由 setup_server.py 安装）。用法：
     .venv\\Scripts\\python.exe register_hermes_plugin.py
@@ -84,16 +83,16 @@ def _enable_plugin_via_cli(plugin_name: str) -> bool:
         return False
     print(f"运行: {subprocess.list2cmdline([hermes, 'plugins', 'enable', plugin_name])}")
     try:
-        result = _config.run_command([hermes, "plugins", "enable", plugin_name], timeout=60)
-    except TimeoutError:
+        result = subprocess.run(
+            [hermes, "plugins", "enable", plugin_name],
+            timeout=60,
+        )
+    except (subprocess.TimeoutExpired, TimeoutError):
         print("错误：hermes plugins enable 超时。", file=sys.stderr)
         return False
     if result.returncode != 0:
         print("警告：hermes plugins enable 执行失败，将回退为直接修改 config.yaml。", file=sys.stderr)
-        print((result.stderr or result.stdout or "").strip(), file=sys.stderr)
         return False
-    if result.stdout.strip():
-        print(result.stdout.strip())
     print(f"[OK] Hermes 插件 {plugin_name} 已启用。")
     return True
 
