@@ -4,8 +4,7 @@
 - todo.json：PascalCase 待办数组，是服务器侧唯一数据源；
 - todo-meta.json：侧车文件，createdAt 只能由 todo_meta_stamp 工具（或等价脚本）
   刷新，webhook 驱动的修改不得触碰。
-- Id/CreatedAt/CompletedAt 由程序生成或维护，Agent 不自行编造；只有更新/完成
-  已有条目时可传入已存在的 Id 用于定位。
+- 已有条目时可传入已存在的 Id 用于定位。
 """
 
 TODO_LIST = {
@@ -31,7 +30,7 @@ TODO_GET = {
 
 TODO_SAVE = {
     "name": "todo_save",
-    "description": "整体覆盖写入 data/todo.json。只接收 Title 数组，Id/CreatedAt/CompletedAt/IsCompleted 由程序自动生成；用于全量替换。",
+    "description": "整体覆盖写入 data/todo.json。",
     "parameters": {
         "type": "object",
         "properties": {
@@ -65,7 +64,7 @@ TODO_UPSERT = {
 
 TODO_COMPLETED = {
     "name": "todo_completed",
-    "description": "修改已有待办的完成状态。接收已存在的 Id（GUID）和 completed 布尔值；CompletedAt 由程序自动生成或清空。",
+    "description": "修改已有待办的完成状态。接收已存在的 Id（GUID）和 completed 布尔值。",
     "parameters": {
         "type": "object",
         "properties": {
@@ -91,7 +90,7 @@ TODO_DELETE = {
 
 TODO_META_GET = {
     "name": "todo_meta_get",
-    "description": "读取 data/todo-meta.json 元数据（date/createdAt/count）。侧车缺失时按当前数据初始化并返回；count 始终取 todo.json 实时条数。",
+    "description": "读取 data/todo-meta.json 元数据（date/createdAt/count）。",
     "parameters": {
         "type": "object",
         "properties": {},
@@ -100,7 +99,7 @@ TODO_META_GET = {
 
 TODO_META_STAMP = {
     "name": "todo_meta_stamp",
-    "description": "刷新 data/todo-meta.json：更新 date 为今日、createdAt 为当前 UTC、count 为实时条数。仅在每日例行维护结束时调用；webhook 驱动的小改动禁止调用本工具。",
+    "description": "刷新 data/todo-meta.json：更新 date 为今日、createdAt 为当前 UTC、count 为实时条数。仅在每日例行维护结束时调用。",
     "parameters": {
         "type": "object",
         "properties": {},
