@@ -66,11 +66,11 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
 
     private readonly HttpClient _httpClient;
 
-    private readonly Guid _clientId = Guid.NewGuid();
-
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     private readonly object _stateLock = new();
+    
+    private readonly object _timerLock = new();
 
     private readonly Dictionary<Guid, TodoItem> _snapshot = new();
 
@@ -83,6 +83,8 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
     private int _dispatchRunning;
 
     private HermesSettings _settings = HermesSettings.CreateDefault();
+
+    private Timer? _timer;
 
     [ObservableProperty]
     private SyncStatus _status;
@@ -249,6 +251,23 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
         if (_suppressChanged || !_initialized || !_settings.SyncEnabled)
             return;
 
+        ActivateTimer();
+    }
+    
+    private void ActivateTimer()
+    {
+        lock (_timerLock)
+        {
+            _timer?.Dispose();
+            _timer = new Timer(OnTick, null, TimeSpan.FromSeconds(5), Timeout.InfiniteTimeSpan);
+        }
+    }
+
+    private void OnTick(object? state)
+    {
+        _timer!.Dispose();
+        _timer = null;
+        
         if (DiffAndEnqueue() > 0)
         {
             RefreshPendingSyncCount();
@@ -376,19 +395,23 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
                 batch = new List<PendingEvent>(_pendingQueue);
                 _pendingQueue.Clear();
             }
-
-            foreach (var ev in batch)
+            
+            try
             {
-                try
+                // 限制每批推送最多发送 15 条todo
+                for (int i = 0; i < batch.Count; i += 15)
                 {
-                    await SendAsync(ev.Snapshot, ev.Type);
+                    await SendAsync(batch.Skip(i)
+                        .Take(15)
+                        .ToList());
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "发送 {EventType} 事件给待办 {Id} 时出现意外错误。",
-                        ev.Type, ev.Snapshot.Id);
-                }
+                
             }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "推送待办到远端时发生错误");
+            }
+            
         }
     }
 
@@ -405,25 +428,39 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
     /// <see cref="HermesSettings.MaxRetryAttempts"/> + 1 次。
     /// 成功后将现存条目标记为已同步；全部失败则保持待处理。
     /// </summary>
-    private async Task SendAsync(TodoItem item, string eventType)
+    private async Task SendAsync(List<PendingEvent> items)
     {
-        var eventId = Guid.NewGuid();
-        var envelope = new
+        var envelopes = new List<dynamic>();
+        var types = new List<string>();
+        var ids = new List<Guid>();
+        
+        foreach (var item in items)
         {
-            eventType,
-            clientId = _clientId,
-            eventId,
-            timestamp = DateTimeOffset.Now.ToString("O", CultureInfo.InvariantCulture),
-            payload = new
+            types.Add(item.Type);
+            ids.Add(item.Snapshot.Id);
+            
+            envelopes.Add(new
             {
-                id = item.Id,
-                title = item.Title,
-                isCompleted = item.IsCompleted,
-                createdAt = item.CreatedAt,
-                completedAt = item.CompletedAt,
-            },
+                eventType = item.Type,
+                timestamp = DateTimeOffset.Now.ToString("O", CultureInfo.InvariantCulture),
+                payload = new
+                {
+                    id = item.Snapshot.Id,
+                    title = item.Snapshot.Title,
+                    isCompleted = item.Snapshot.IsCompleted,
+                    createdAt = item.Snapshot.CreatedAt,
+                    completedAt = item.Snapshot.CompletedAt,
+                },
+            });
+        }
+        var body = new
+        {
+            eventType = "update",
+            events = envelopes,
         };
-        var rawBody = JsonSerializer.Serialize(envelope, SnakeCaseOption);
+        
+        var eventId = Guid.NewGuid();
+        var rawBody = JsonSerializer.Serialize(body, SnakeCaseOption);
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
         var signature = HermesWebhookSigner.ComputeSignature(_settings.WebhookSecret, timestamp, rawBody);
         var url = $"{_settings.HermesBaseUrl.TrimEnd('/')}/webhooks/{_settings.WebhookRouteName}";
@@ -444,9 +481,10 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
                 if (response.IsSuccessStatusCode)
                 {
                     _logger.LogInformation(
-                        "待办 {Id} 的 Webhook {EventType} 已被接受（HTTP {StatusCode}）。",
-                        item.Id, eventType, (int)response.StatusCode);
-                    await _todoService.MarkSyncedAsync(new[] { item.Id });
+                        "共 {Count} 个待办已被接收（HTTP {StatusCode}）。Types: {Types}。Ids:{Ids}",
+                        items.Count,  (int)response.StatusCode, string.Join("\n;", types),  string.Join("\n;", ids));
+                    await _todoService.MarkSyncedAsync(ids);
+                    
                     RefreshPendingSyncCount();
                     UpdateStatus(SyncStatus.Success, null);
                     return;
@@ -455,29 +493,31 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
                 if (response.StatusCode == HttpStatusCode.TooManyRequests)
                 {
                     _logger.LogWarning(
-                        "待办 {Id} 的 Webhook 被限流（429），退避等待（第 {Attempt}/{Total} 次尝试）。",
-                        item.Id, attempt, totalAttempts);
+                        "共 {Count} 个待办的 Webhook 被限流（429），退避等待（第 {Attempt}/{Total} 次尝试）。",
+                        items.Count, attempt, totalAttempts);
                     if (attempt < totalAttempts)
                         await Task.Delay(TimeSpan.FromSeconds(2));
                     continue;
                 }
 
                 _logger.LogWarning(
-                    "待办 {Id} 的 Webhook {EventType} 失败，HTTP {StatusCode}（第 {Attempt}/{Total} 次尝试）。",
-                    item.Id, eventType, (int)response.StatusCode, attempt, totalAttempts);
+                    "共 {Count} 个待办的 Webhook 失败，HTTP {StatusCode}（第 {Attempt}/{Total} 次尝试）。Types: {Types}。Ids: {Ids}",
+                    items.Count, (int)response.StatusCode, attempt, totalAttempts,
+                    string.Join(", ", types), string.Join(", ", ids));
             }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
             {
                 _logger.LogWarning(
-                    ex, "待办 {Id} 的 Webhook {EventType} 网络错误（第 {Attempt}/{Total} 次尝试）。",
-                    item.Id, eventType, attempt, totalAttempts);
+                    ex, "共 {Count} 个待办的 Webhook 网络错误（第 {Attempt}/{Total} 次尝试）。Types: {Types}。Ids: {Ids}",
+                    items.Count, attempt, totalAttempts,
+                    string.Join(", ", types), string.Join(", ", ids));
             }
         }
 
         _logger.LogError(
-            "待办 {Id} 的 Webhook {EventType} 已用尽全部 {TotalAttempts} 次尝试；条目保持待处理。",
-            item.Id, eventType, totalAttempts);
-        UpdateStatus(SyncStatus.Error, $"待办 {item.Id} 的 Webhook {eventType} 在 {totalAttempts} 次尝试后失败。");
+            "共 {Count} 个待办的 Webhook 已用尽全部 {TotalAttempts} 次尝试；条目保持待处理。Types: {Types}。Ids: {Ids}",
+            items.Count, totalAttempts, string.Join(", ", types), string.Join(", ", ids));
+        UpdateStatus(SyncStatus.Error, $"共 {items.Count} 个待办的 Webhook 在 {totalAttempts} 次尝试后失败。");
         RefreshPendingSyncCount();
     }
 
