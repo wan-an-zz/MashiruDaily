@@ -23,6 +23,8 @@ description: 以半个月/月/任意时间周期为单位制定阶段目标（�
 | **每日计划制定**（daily-planning）               | 将阶段目标拆解为每日任务          | `plan-daily.md`                   |
 | 每日代办布置（todo-assigning)                   | 将每日任务落实下去             | `todo.json`                       |
 
+> 所有文件的产出位置均为 `$HOME/.mashiru-daily/`
+
 ## 核心准则（必须遵守）
 
 ### 准则 1：阶段计划 ≠ 每日任务清单

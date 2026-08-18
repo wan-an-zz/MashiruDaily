@@ -41,7 +41,7 @@ TODO_SAVE = {
 
 TODO_UPSERT = {
     "name": "todo_upsert",
-    "description": "同步客户端完整待办或新增待办",
+    "description": "同步客户端完整待办或新增待办，completed_at与created_at **不建议** 填写",
     "parameters": {
         "type": "object",
         "properties": {
@@ -57,7 +57,7 @@ TODO_UPSERT = {
             },
             "created_at": {
                 "type": ["string", "null"],
-                "description": "创建的时间, 为空则自动生成"
+                "description": "创建的时间, 为空则继承原本的创建时间"
             }
         },
         "required": ["title", "is_completed"],
