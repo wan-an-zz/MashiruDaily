@@ -12,3 +12,4 @@ provides_tools:
   - todo_delete
   - todo_meta_get
   - todo_meta_stamp
+  - speak_to_user

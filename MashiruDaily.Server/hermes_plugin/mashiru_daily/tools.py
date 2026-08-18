@@ -29,6 +29,9 @@ def _data_dir() -> Path:
         return Path(env)
     return _server_root() / "data"
 
+def _msg_path() -> Path:
+    """返回 data/msg.json 路径。"""
+    return _data_dir() / "messages-to-user.json"
 
 def _todo_path() -> Path:
     """返回 data/todo.json 路径。"""
@@ -301,5 +304,17 @@ def todo_meta_stamp(args: dict, **kwargs) -> str:
     """刷新 data/todo-meta.json 的 created_at 与 count。"""
     try:
         return _ok({"success": True, "meta": _stamp_meta()})
+    except Exception as exc:
+        return _err(exc)
+
+def speak_to_user(args: dict, **kwargs) -> str:
+    try:
+        text = args.get("text")
+        if not isinstance(text, str):
+            return _err("参数 text 必须是字符串")
+
+        _atomic_write_json(_msg_path(), {"text": text})
+        
+        return _ok({"success": True, "text": text})
     except Exception as exc:
         return _err(exc)

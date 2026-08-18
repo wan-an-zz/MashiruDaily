@@ -113,6 +113,21 @@ TODO_META_STAMP = {
     },
 }
 
+SPEAK_TO_USER = {
+    "name": "speak_to_user",
+    "description": "向用户发送一句话",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "text": {
+                "type": "string",
+                "description": "需要发送的文字",
+            }
+        },
+        "required": ["text"],
+    }
+}
+
 # 统一注册表：name -> schema
 TOOLS = {
     TODO_LIST["name"]: TODO_LIST,
@@ -123,4 +138,5 @@ TOOLS = {
     TODO_DELETE["name"]: TODO_DELETE,
     TODO_META_GET["name"]: TODO_META_GET,
     TODO_META_STAMP["name"]: TODO_META_STAMP,
+    SPEAK_TO_USER["name"]: SPEAK_TO_USER,
 }
