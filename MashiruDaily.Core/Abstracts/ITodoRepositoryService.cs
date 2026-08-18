@@ -8,7 +8,7 @@ namespace MashiruDaily.Core.Abstracts;
 /// 待办事项的持久化抽象。如需换成数据库或文件存储，只需替换实现，
 /// 无需改动应用其余部分。
 /// </summary>
-public interface ITodoRepository
+public interface ITodoRepositoryService
 {
     Task<IReadOnlyList<TodoItem>> LoadAsync();
 

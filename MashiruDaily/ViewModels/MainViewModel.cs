@@ -18,7 +18,7 @@ namespace MashiruDaily.ViewModels;
 /// </summary>
 public partial class MainViewModel : ViewModelBase
 {
-    private readonly IHermesSyncService _syncService;
+    private readonly IRemoteSyncService _syncService;
 
     [ObservableProperty]
     private string _syncStatusText = "空闲";
@@ -39,7 +39,7 @@ public partial class MainViewModel : ViewModelBase
 
     public ObservableCollection<INavigationItem> NavigationItems { get; }
 
-    public MainViewModel(TodoPageViewModel todoPage, SettingsPageViewModel settingsPage, IHermesSyncService syncService)
+    public MainViewModel(TodoPageViewModel todoPage, SettingsPageViewModel settingsPage, IRemoteSyncService syncService)
     {
         _syncService = syncService;
         TodoPage = todoPage;

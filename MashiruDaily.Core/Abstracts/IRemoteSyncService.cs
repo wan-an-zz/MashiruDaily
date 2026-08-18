@@ -20,7 +20,7 @@ public enum SyncStatus
     /// <summary>最近一次同步操作成功完成。</summary>
     Success,
 
-    /// <summary>最近一次同步操作失败；详见 <see cref="IHermesSyncService.LastError"/>。</summary>
+    /// <summary>最近一次同步操作失败；详见 <see cref="IRemoteSyncService.LastError"/>。</summary>
     Error,
 
     /// <summary>拉取被有意跳过（例如存在本地待同步的修改）。</summary>
@@ -31,7 +31,7 @@ public enum SyncStatus
 /// 编排 Hermes AI 同步：监听待办服务的变更并作为已签名的 Webhook 事件推送，
 /// 同时实现通信协议中定义的启动「先推后拉」流程。
 /// </summary>
-public interface IHermesSyncService
+public interface IRemoteSyncService
 {
     /// <summary>当前同步状态；变化通过 <see cref="StatusChanged"/> 通知。</summary>
     SyncStatus Status { get; }

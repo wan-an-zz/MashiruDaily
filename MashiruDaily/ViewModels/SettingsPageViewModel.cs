@@ -13,9 +13,9 @@ namespace MashiruDaily.ViewModels;
 
 public partial class SettingsPageViewModel : ViewModelBase
 {
-    private readonly IHermesSettingsRepository _settingsRepository;
+    private readonly IRemoteServerSettingsRepository _settingsRepository;
 
-    private readonly IHermesSyncService _syncService;
+    private readonly IRemoteSyncService _syncService;
 
     private readonly HttpClient _httpClient;
 
@@ -56,8 +56,8 @@ public partial class SettingsPageViewModel : ViewModelBase
     private string? _testResultText;
 
     public SettingsPageViewModel(
-        IHermesSettingsRepository settingsRepository,
-        IHermesSyncService syncService,
+        IRemoteServerSettingsRepository settingsRepository,
+        IRemoteSyncService syncService,
         HttpClient httpClient)
     {
         _settingsRepository = settingsRepository;
@@ -88,7 +88,7 @@ public partial class SettingsPageViewModel : ViewModelBase
         if (ErrorText is not null)
             return;
 
-        await _settingsRepository.SaveAsync(new HermesSettings
+        await _settingsRepository.SaveAsync(new RemoteServerSettings
         {
             ServerBaseUrl = ServerBaseUrl.Trim(),
             HermesBaseUrl = HermesBaseUrl.Trim(),

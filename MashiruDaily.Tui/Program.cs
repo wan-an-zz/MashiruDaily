@@ -15,7 +15,7 @@ var services = ConfigureServices();
 var todoService = services.GetRequiredService<ITodoService>();
 await todoService.InitializeAsync();
 
-var sync = services.GetRequiredService<IHermesSyncService>();
+var sync = services.GetRequiredService<IRemoteSyncService>();
 var logger = services.GetRequiredService<ILogger<Program>>();
 sync.StatusChanged += (_, _) => logger.LogInformation("同步状态：{Status}", sync.Status);
 _ = SyncStartupAsync(sync, logger);
@@ -48,16 +48,16 @@ static ServiceProvider ConfigureServices()
     });
 
     services.AddSingleton<HttpClient>();
-    services.AddSingleton<ITodoRepository, JsonTodoRepository>();
+    services.AddSingleton<ITodoRepositoryService, TodoRepoService>();
     services.AddSingleton<ITodoService, TodoService>();
-    services.AddSingleton<IHermesSettingsRepository, JsonHermesSettingsRepository>();
-    services.AddSingleton<IHermesSyncService, HermesSyncService>();
+    services.AddSingleton<IRemoteServerSettingsRepository, RemoteServerSettingsService>();
+    services.AddSingleton<IRemoteSyncService, RemoteSyncService>();
     services.AddSingleton<TodoPageViewModel>();
 
     return services.BuildServiceProvider();
 }
 
-static async Task SyncStartupAsync(IHermesSyncService sync, ILogger logger)
+static async Task SyncStartupAsync(IRemoteSyncService sync, ILogger logger)
 {
     try { await sync.InitializeAsync(); }
     catch (Exception ex) { logger.LogError(ex, "Hermes 同步初始化失败。"); }

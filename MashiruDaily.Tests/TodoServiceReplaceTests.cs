@@ -26,7 +26,7 @@ public class TodoServiceReplaceTests : IDisposable
     }
 
     private static async Task WaitForSaveAsync(
-        BlockingTodoRepository repo, Func<IReadOnlyList<TodoItem>?, bool> predicate, int timeoutMs = 2000)
+        BlockingTodoRepositoryService repo, Func<IReadOnlyList<TodoItem>?, bool> predicate, int timeoutMs = 2000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
         while (true)
@@ -42,7 +42,7 @@ public class TodoServiceReplaceTests : IDisposable
     [Fact]
     public async Task ReplaceAllAsync_SwapsItems_RaisesChanged_AndPersistsFinalList()
     {
-        var repo = new BlockingTodoRepository(new TodoItem { Title = "old" });
+        var repo = new BlockingTodoRepositoryService(new TodoItem { Title = "old" });
         var service = new TodoService(repo, NullLogger<TodoService>.Instance);
         await service.InitializeAsync();
 
@@ -68,7 +68,7 @@ public class TodoServiceReplaceTests : IDisposable
     [Fact]
     public async Task MarkSyncedAsync_FlipsHasSyncedOnMatchingIdsOnly_AndPersistsThroughRepoRoundTrip()
     {
-        var repo = new JsonTodoRepository(NullLogger<JsonTodoRepository>.Instance, _dir);
+        var repo = new TodoRepoService(NullLogger<TodoRepoService>.Instance, _dir);
         var items = new[]
         {
             new TodoItem { Title = "A" },
@@ -96,7 +96,7 @@ public class TodoServiceReplaceTests : IDisposable
     [Fact]
     public async Task MarkSyncedAsync_DoesNotRaiseChanged()
     {
-        var repo = new JsonTodoRepository(NullLogger<JsonTodoRepository>.Instance, _dir);
+        var repo = new TodoRepoService(NullLogger<TodoRepoService>.Instance, _dir);
         var item = new TodoItem { Title = "A" };
         await repo.SaveAsync(new[] { item });
 
@@ -115,7 +115,7 @@ public class TodoServiceReplaceTests : IDisposable
     [Fact]
     public async Task SnapshotItems_RoundTripsHasSynced()
     {
-        var repo = new JsonTodoRepository(NullLogger<JsonTodoRepository>.Instance, _dir);
+        var repo = new TodoRepoService(NullLogger<TodoRepoService>.Instance, _dir);
         var item = new TodoItem { Title = "A" };
         await repo.SaveAsync(new[] { item });
 

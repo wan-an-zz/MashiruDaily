@@ -8,19 +8,19 @@ using Xunit;
 
 namespace MashiruDaily.Tests;
 
-public class JsonHermesSettingsRepositoryTests : IDisposable
+public class RemoteServerSettingsServiceTests : IDisposable
 {
     private readonly string _dir;
 
     private readonly string _file;
 
-    private readonly JsonHermesSettingsRepository _repository;
+    private readonly RemoteServerSettingsService _service;
 
-    public JsonHermesSettingsRepositoryTests()
+    public RemoteServerSettingsServiceTests()
     {
         _dir = Path.Combine(Path.GetTempPath(), "MashiruDaily.Tests", Guid.NewGuid().ToString("N"));
         _file = Path.Combine(_dir, "settings.json");
-        _repository = new JsonHermesSettingsRepository(NullLogger<JsonHermesSettingsRepository>.Instance, _dir);
+        _service = new RemoteServerSettingsService(NullLogger<RemoteServerSettingsService>.Instance, _dir);
     }
 
     public void Dispose()
@@ -32,7 +32,7 @@ public class JsonHermesSettingsRepositoryTests : IDisposable
     [Fact]
     public async Task RoundTrip_PreservesAllFields()
     {
-        var settings = new HermesSettings
+        var settings = new RemoteServerSettings
         {
             ServerBaseUrl = "http://192.168.1.100:8080",
             HermesBaseUrl = "http://10.0.0.5:8644",
@@ -44,8 +44,8 @@ public class JsonHermesSettingsRepositoryTests : IDisposable
             LastSyncedAt = "2026-08-09",
         };
 
-        await _repository.SaveAsync(settings);
-        var loaded = await _repository.LoadAsync();
+        await _service.SaveAsync(settings);
+        var loaded = await _service.LoadAsync();
 
         Assert.Equal(settings.ServerBaseUrl, loaded.ServerBaseUrl);
         Assert.Equal(settings.HermesBaseUrl, loaded.HermesBaseUrl);
@@ -60,7 +60,7 @@ public class JsonHermesSettingsRepositoryTests : IDisposable
     [Fact]
     public async Task LoadAsync_WhenFileMissing_ReturnsDefaults()
     {
-        var loaded = await _repository.LoadAsync();
+        var loaded = await _service.LoadAsync();
 
         Assert.Equal(string.Empty, loaded.ServerBaseUrl);
         Assert.Equal("http://localhost:8644", loaded.HermesBaseUrl);
@@ -78,7 +78,7 @@ public class JsonHermesSettingsRepositoryTests : IDisposable
         Directory.CreateDirectory(_dir);
         await File.WriteAllTextAsync(_file, "{ not valid json !!!");
 
-        var loaded = await _repository.LoadAsync();
+        var loaded = await _service.LoadAsync();
 
         Assert.False(loaded.SyncEnabled);
         Assert.Equal(3, loaded.MaxRetryAttempts);
@@ -88,7 +88,7 @@ public class JsonHermesSettingsRepositoryTests : IDisposable
     [Fact]
     public async Task SaveAsync_CreatesDirectoryAndWritesAtomicFile()
     {
-        await _repository.SaveAsync(HermesSettings.CreateDefault());
+        await _service.SaveAsync(RemoteServerSettings.CreateDefault());
 
         Assert.True(File.Exists(_file));
         Assert.False(File.Exists(_file + ".tmp"));

@@ -7,9 +7,9 @@ namespace MashiruDaily.Core.Abstracts;
 /// Hermes AI 同步设置的持久化抽象。如需换成其他存储，只需替换实现，
 /// 无需改动应用其余部分。
 /// </summary>
-public interface IHermesSettingsRepository
+public interface IRemoteServerSettingsRepository
 {
-    Task<HermesSettings> LoadAsync();
+    Task<RemoteServerSettings> LoadAsync();
 
-    Task SaveAsync(HermesSettings settings);
+    Task SaveAsync(RemoteServerSettings settings);
 }

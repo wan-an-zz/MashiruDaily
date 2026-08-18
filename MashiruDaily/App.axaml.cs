@@ -39,7 +39,7 @@ public partial class App : Application
         var logger = Services.GetRequiredService<ILogger<App>>();
 
         // 即发即忘的 Hermes 启动同步；绝不在启动时阻塞 UI 于网络请求。
-        _ = SyncStartupAsync(Services.GetRequiredService<IHermesSyncService>(), logger);
+        _ = SyncStartupAsync(Services.GetRequiredService<IRemoteSyncService>(), logger);
         logger.LogInformation("MashiruDaily 启动中（桌面={IsDesktop}）。",
             ApplicationLifetime is IClassicDesktopStyleApplicationLifetime);
 
@@ -76,7 +76,7 @@ public partial class App : Application
         // 退出时尽力排空待处理的 Hermes Webhook 事件；绝不在关闭时阻塞。
         try
         {
-            await Services.GetRequiredService<IHermesSyncService>().FlushAsync();
+            await Services.GetRequiredService<IRemoteSyncService>().FlushAsync();
         }
         catch (Exception ex)
         {
@@ -88,7 +88,7 @@ public partial class App : Application
             desktop.Shutdown();
     }
 
-    private static async Task SyncStartupAsync(IHermesSyncService sync, ILogger logger)
+    private static async Task SyncStartupAsync(IRemoteSyncService sync, ILogger logger)
     {
         try
         {
@@ -127,13 +127,13 @@ public partial class App : Application
         });
 
         // 领域 / 基础设施
-        services.AddSingleton<ITodoRepository, JsonTodoRepository>();
+        services.AddSingleton<ITodoRepositoryService, TodoRepoService>();
         services.AddSingleton<ITodoService, TodoService>();
 
         // Hermes 同步
         services.AddSingleton<HttpClient>();
-        services.AddSingleton<IHermesSettingsRepository, JsonHermesSettingsRepository>();
-        services.AddSingleton<IHermesSyncService, HermesSyncService>();
+        services.AddSingleton<IRemoteServerSettingsRepository, RemoteServerSettingsService>();
+        services.AddSingleton<IRemoteSyncService, RemoteSyncService>();
 
         // 视图模型
         services.AddSingleton<TodoPageViewModel>();

@@ -89,7 +89,7 @@ public sealed class ThrowingHttpMessageHandler : HttpMessageHandler
         => Task.FromException<HttpResponseMessage>(_exception);
 }
 
-public class HermesSyncServiceTests : IDisposable
+public class RemoteSyncServiceTests : IDisposable
 {
     private const string ServerCreatedAt = "2026-08-10T17:00:00+08:00";
 
@@ -101,7 +101,7 @@ public class HermesSyncServiceTests : IDisposable
 
     private readonly string _dir;
 
-    public HermesSyncServiceTests()
+    public RemoteSyncServiceTests()
     {
         _dir = Path.Combine(Path.GetTempPath(), "MashiruDaily.Tests", Guid.NewGuid().ToString("N"));
     }
@@ -127,7 +127,7 @@ public class HermesSyncServiceTests : IDisposable
     private static HttpResponseMessage JsonResponse(HttpStatusCode status, string json) =>
         new(status) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
 
-    private static HermesSettings SyncSettings() => new()
+    private static RemoteServerSettings SyncSettings() => new()
     {
         SyncEnabled = true,
         HermesBaseUrl = "http://hermes.test",
@@ -149,21 +149,21 @@ public class HermesSyncServiceTests : IDisposable
             return new HttpResponseMessage(HttpStatusCode.NotFound);
         });
 
-    private async Task<(TodoService TodoService, JsonHermesSettingsRepository SettingsRepo, HermesSyncService SyncService, HttpMessageHandler Handler)>
-        CreateHarnessAsync(HttpMessageHandler handler, HermesSettings? settings = null, params TodoItem[] seed)
+    private async Task<(TodoService TodoService, RemoteServerSettingsService SettingsRepo, RemoteSyncService SyncService, HttpMessageHandler Handler)>
+        CreateHarnessAsync(HttpMessageHandler handler, RemoteServerSettings? settings = null, params TodoItem[] seed)
     {
-        var todoRepo = new JsonTodoRepository(NullLogger<JsonTodoRepository>.Instance, _dir);
+        var todoRepo = new TodoRepoService(NullLogger<TodoRepoService>.Instance, _dir);
         await todoRepo.SaveAsync(seed);
 
         var todoService = new TodoService(todoRepo, NullLogger<TodoService>.Instance);
         await todoService.InitializeAsync();
 
-        var settingsRepo = new JsonHermesSettingsRepository(NullLogger<JsonHermesSettingsRepository>.Instance, _dir);
+        var settingsRepo = new RemoteServerSettingsService(NullLogger<RemoteServerSettingsService>.Instance, _dir);
         await settingsRepo.SaveAsync(settings ?? SyncSettings());
 
         var httpClient = new HttpClient(handler);
-        var syncService = new HermesSyncService(
-            todoService, settingsRepo, NullLogger<HermesSyncService>.Instance, httpClient);
+        var syncService = new RemoteSyncService(
+            todoService, settingsRepo, NullLogger<RemoteSyncService>.Instance, httpClient);
 
         return (todoService, settingsRepo, syncService, handler);
     }

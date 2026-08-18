@@ -16,7 +16,7 @@ namespace MashiruDaily.Core.Services;
 /// </summary>
 public sealed class TodoService : ITodoService
 {
-    private readonly ITodoRepository _repository;
+    private readonly ITodoRepositoryService _repositoryService;
 
     private readonly ILogger<TodoService> _logger;
 
@@ -34,15 +34,15 @@ public sealed class TodoService : ITodoService
 
     public event EventHandler? Changed;
 
-    public TodoService(ITodoRepository repository, ILogger<TodoService> logger)
+    public TodoService(ITodoRepositoryService repositoryService, ILogger<TodoService> logger)
     {
-        _repository = repository;
+        _repositoryService = repositoryService;
         _logger = logger;
     }
 
     public async Task InitializeAsync()
     {
-        var loaded = await _repository.LoadAsync();
+        var loaded = await _repositoryService.LoadAsync();
         _items.AddRange(loaded);
         _logger.LogInformation("已加载 {Count} 条待办。", _items.Count);
     }
@@ -206,7 +206,7 @@ public sealed class TodoService : ITodoService
 
             try
             {
-                await _repository.SaveAsync(snapshot);
+                await _repositoryService.SaveAsync(snapshot);
             }
             catch (Exception ex)
             {

@@ -4,7 +4,7 @@ namespace MashiruDaily.Core.Models;
 /// Hermes AI 同步功能的持久化设置。纯数据模型；
 /// <see cref="CreateDefault"/> 提供尚无设置文件时使用的默认值。
 /// </summary>
-public sealed class HermesSettings
+public sealed class RemoteServerSettings
 {
     /// <summary>
     /// 拉取用的服务器基础地址，例如 "http://192.168.1.100:8080"。
@@ -49,7 +49,7 @@ public sealed class HermesSettings
     /// <summary>
     /// 尚无设置文件时使用的工厂默认值。
     /// </summary>
-    public static HermesSettings CreateDefault() => new()
+    public static RemoteServerSettings CreateDefault() => new()
     {
         ServerBaseUrl = string.Empty,
         HermesBaseUrl = "http://localhost:8644",

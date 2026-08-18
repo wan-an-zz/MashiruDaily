@@ -23,7 +23,7 @@ namespace MashiruDaily.Core.Services;
 /// 启动「先比对服务器创建时间，再决定推拉」流程。维护最近观测数据的值快照，
 /// 以便在不动 <c>TodoService</c> 自身锁的情况下做差异对比。
 /// </summary>
-public sealed partial class HermesSyncService : ObservableObject, IHermesSyncService
+public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncService
 {
     private static class EventTypes
     {
@@ -60,9 +60,9 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
 
     private readonly ITodoService _todoService;
 
-    private readonly IHermesSettingsRepository _settingsRepo;
+    private readonly IRemoteServerSettingsRepository _settingsRepo;
 
-    private readonly ILogger<HermesSyncService> _logger;
+    private readonly ILogger<RemoteSyncService> _logger;
 
     private readonly HttpClient _httpClient;
 
@@ -82,7 +82,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
 
     private int _dispatchRunning;
 
-    private HermesSettings _settings = HermesSettings.CreateDefault();
+    private RemoteServerSettings _settings = RemoteServerSettings.CreateDefault();
 
     private Timer? _timer;
 
@@ -106,10 +106,10 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
     /// <param name="settingsRepo">持久化的 Hermes 设置存储。</param>
     /// <param name="logger">结构化日志器。</param>
     /// <param name="httpClient">可选客户端（测试用）；缺省时创建默认实例。</param>
-    public HermesSyncService(
+    public RemoteSyncService(
         ITodoService todoService,
-        IHermesSettingsRepository settingsRepo,
-        ILogger<HermesSyncService> logger,
+        IRemoteServerSettingsRepository settingsRepo,
+        ILogger<RemoteSyncService> logger,
         HttpClient? httpClient = null)
     {
         _todoService = todoService;
@@ -428,7 +428,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
 
     /// <summary>
     /// 发送一批待办到 /api/update，最多重试
-    /// <see cref="HermesSettings.MaxRetryAttempts"/> + 1 次。
+    /// <see cref="RemoteServerSettings.MaxRetryAttempts"/> + 1 次。
     /// 成功后将现存条目标记为已同步；全部失败则保持待处理。
     /// </summary>
     private async Task SendAsync(List<PendingEvent> items)
@@ -576,7 +576,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
     }
 
     /// <summary>
-    /// 请求服务器元数据，并依据 <c>createdAt</c> 与本地 <see cref="HermesSettings.LastSyncedAt"/>
+    /// 请求服务器元数据，并依据 <c>createdAt</c> 与本地 <see cref="RemoteServerSettings.LastSyncedAt"/>
     /// 决定是否需要拉取。调用方必须持有 <see cref="_gate"/>。
     /// </summary>
     /// <returns>
@@ -638,7 +638,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
 
     /// <summary>
     /// 拉取服务器整列表并整体替换本地集合，最后持久化
-    /// <see cref="HermesSettings.LastSyncedAt"/> 为服务器创建时间。
+    /// <see cref="RemoteServerSettings.LastSyncedAt"/> 为服务器创建时间。
     /// 调用方必须持有 <see cref="_gate"/>。
     /// </summary>
     private async Task PullTodoListAsync(DateTimeOffset serverCreatedAt)
