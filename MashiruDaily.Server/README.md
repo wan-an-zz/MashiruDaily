@@ -42,6 +42,7 @@ MashiruDaily.Server/
 ├── configure_cron.py        创建每日 Hermes cron 任务 mashiru-daily（幂等）
 ├── install_autostart.py     物理开机自启（Windows: schtasks ONSTART；Linux/macOS: systemd 系统服务/crontab）
 ├── bootstrap.py             一键初始化：串联全部开始流程（推荐入口）
+├── uninstall.py             一键卸载：移除全部部署足迹（bootstrap 逆操作）
 ├── _config.py               共享工具：定位 hermes、备份 config.yaml、round-trip 读写
 └── requirements.txt         fastapi / uvicorn / ruamel.yaml / pytest / httpx
 ```
@@ -116,7 +117,7 @@ curl http://localhost:8123/api/todo
 
 ## 5. 配置脚本用法
 
-四个脚本全部幂等，重复运行不产生改动。其中直接修改 `HERMES_HOME/config.yaml` 的两个（register_hermes_plugin、configure_webhook）**只在真正修改前**备份为 `config.yaml.bak-<时间戳>`；configure_cron 走 `hermes cron` 命令、install_autostart 走注册表/systemd/crontab，不触碰 config.yaml。统一用 `.venv` 内的 Python 运行（改 config.yaml 的两个依赖 ruamel.yaml，必须如此）。Hermes 与 config.yaml 的定位：默认 `%LOCALAPPDATA%\hermes`，可用环境变量 `HERMES_HOME` 覆盖。
+五个脚本全部幂等，重复运行不产生改动。其中直接修改 `HERMES_HOME/config.yaml` 的两个（register_hermes_plugin、configure_webhook）**只在真正修改前**备份为 `config.yaml.bak-<时间戳>`（同一秒内多次备份自动追加 `-N` 后缀，不互相覆盖）；configure_cron 走 `hermes cron` 命令、install_autostart 走注册表/systemd/crontab，不触碰 config.yaml。统一用 `.venv` 内的 Python 运行（改 config.yaml 的两个依赖 ruamel.yaml，必须如此）。Hermes 与 config.yaml 的定位：默认 `%LOCALAPPDATA%\hermes`，可用环境变量 `HERMES_HOME` 覆盖。
 
 **register_hermes_plugin.py**：把 `hermes_plugin/mashiru_daily/` 以目录链接安装到 `$HERMES_HOME/plugins/mashiru-daily`，通过 Hermes CLI（`hermes plugins enable`）启用插件；同时把 `hermes_plugin/mashiru_daily/skills` 写入 config.yaml 的 `skills.external_dirs`（不存在则创建，已包含则跳过，并迁移移除旧 `Server/skills` 引用）。插件内的 `register(ctx)` 负责通过 Hermes 接口注册全部 `todo_*` 工具与内置 skill：
 
@@ -171,6 +172,15 @@ sudo .venv/bin/python install_autostart.py --disable       # 临时禁用（不�
 sudo .venv/bin/python install_autostart.py --enable        # 重新启用
 sudo .venv/bin/python install_autostart.py --uninstall     # 删除自启
 .venv/bin/python install_autostart.py --dry-run            # 演练：只打印命令不执行（无需 sudo）
+```
+
+**uninstall.py**：一键卸载 MashiruDaily.Server 的**全部部署足迹**（bootstrap.py 的逆操作，幂等可重复运行），仅保留源码仓库本身。用系统 Python 运行（纯标准库）：先停止运行中的服务器进程（按命令行 `app.main` 匹配），再移除开机自启、删除 cron 任务 `mashiru-daily`、清理 config.yaml 的 todo-sync webhook 路由（`--no-restart` 可跳过网关重启）、移除 Hermes 插件注册（CLI disable + config.yaml 条目 + `$HERMES_HOME/plugins/mashiru-daily` 链接，链接指向非本插件源时**绝不删除**）、删除 `.venv` 与 `data/`（默认删除数据前需确认）。各步骤相互独立、尽力而为，失败步骤在末尾汇总。config.yaml 相关步骤依赖 ruamel.yaml：缺失时自动尝试从虚拟环境注入，仍不可用则跳过并给出手动清理指引。安装期生成的 `config.yaml.bak-<时间戳>` 备份一律保留：
+
+```powershell
+python uninstall.py                          # 完整卸载（数据目录需确认）
+python uninstall.py --yes --keep-data        # 免确认 + 保留数据目录
+python uninstall.py --keep-venv --no-stop    # 保留虚拟环境、不停止服务器
+python uninstall.py --dry-run                # 演练：只打印将执行的命令
 ```
 
 ## 6. created_at 语义（重要）

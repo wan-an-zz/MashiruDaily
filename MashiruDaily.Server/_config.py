@@ -64,9 +64,17 @@ def dump_config(yaml_obj, data, path: Path) -> None:
 
 
 def backup_config(path: Path) -> Path:
-    """备份配置文件为 <name>.bak-<YYYYmmddHHMMSS>，返回备份路径。"""
+    """备份配置文件为 <name>.bak-<YYYYmmddHHMMSS>，返回备份路径。
+
+    时间戳精度到秒：同一秒内连续多次备份（如卸载流程中 webhook 与插件两步同秒
+    修改 config.yaml）会冲突，冲突时追加 -N 后缀保证不覆盖前一份备份。
+    """
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
     backup_path = path.with_name(f"{path.name}.bak-{ts}")
+    suffix = 1
+    while backup_path.exists():
+        backup_path = path.with_name(f"{path.name}.bak-{ts}-{suffix}")
+        suffix += 1
     shutil.copy2(path, backup_path)
     return backup_path
 
