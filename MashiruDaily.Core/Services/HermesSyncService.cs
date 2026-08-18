@@ -371,7 +371,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Hermes 待处理事件分发失败。");
+            _logger.LogError(ex, "todo分发失败。");
         }
         finally
         {
@@ -412,7 +412,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "推送待办到远端时发生错误");
+                _logger.LogError(ex, "推送todo到远端时发生错误");
             }
 
         }
@@ -488,7 +488,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
                 if (response.IsSuccessStatusCode)
                 {
                     _logger.LogInformation(
-                        "共 {Count} 个待办已被接收（HTTP {StatusCode}）。Types: {Types}。Ids:{Ids}",
+                        "共 {Count} 个todo已被接收（HTTP {StatusCode}）。Types: {Types}。Ids:{Ids}",
                         items.Count,  (int)response.StatusCode, string.Join("\n;", types),  string.Join("\n;", ids));
                     await _todoService.MarkSyncedAsync(ids);
 
@@ -500,7 +500,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
                 if (response.StatusCode == HttpStatusCode.TooManyRequests)
                 {
                     _logger.LogWarning(
-                        "共 {Count} 个待办的 Webhook 被限流（429），退避等待（第 {Attempt}/{Total} 次尝试）。",
+                        "共 {Count} 个todo被限流（429），退避等待（第 {Attempt}/{Total} 次尝试）。",
                         items.Count, attempt, totalAttempts);
                     if (attempt < totalAttempts)
                         await Task.Delay(TimeSpan.FromSeconds(2));
@@ -555,7 +555,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
                 }
 
                 _logger.LogWarning(
-                    "共 {Count} 个待办推送失败，HTTP {StatusCode}（第 {Attempt}/{Total} 次尝试）。Types: {Types}。Ids: {Ids}",
+                    "共 {Count} 个todo推送失败，HTTP {StatusCode}（第 {Attempt}/{Total} 次尝试）。Types: {Types}。Ids: {Ids}",
                     items.Count, (int)response.StatusCode, attempt, totalAttempts,
                     string.Join(", ", types), string.Join(", ", ids));
             }
@@ -569,7 +569,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
         }
 
         _logger.LogError(
-            "共 {Count} 个待办的 Webhook 已用尽全部 {TotalAttempts} 次尝试；条目保持待处理。Types: {Types}。Ids: {Ids}",
+            "共 {Count} 个todo已用尽全部 {TotalAttempts} 次尝试；条目保持待处理。Types: {Types}。Ids: {Ids}",
             items.Count, totalAttempts, string.Join(", ", types), string.Join(", ", ids));
         UpdateStatus(SyncStatus.Error, $"共 {items.Count} 个待办的 Webhook 在 {totalAttempts} 次尝试后失败。");
         RefreshPendingSyncCount();
@@ -603,8 +603,8 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or NotSupportedException)
         {
-            _logger.LogError(ex, "Hermes 元数据请求失败。");
-            UpdateStatus(SyncStatus.Error, $"元数据请求失败：{ex.Message}");
+            _logger.LogError(ex, "todo-meta请求失败。");
+            UpdateStatus(SyncStatus.Error, $"请求失败：{ex.Message}");
             return null;
         }
 
@@ -652,7 +652,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
             using var listResponse = await _httpClient.GetAsync(listUrl);
             if (listResponse.StatusCode != HttpStatusCode.OK)
             {
-                UpdateStatus(SyncStatus.Error, $"待办列表请求返回 HTTP {(int)listResponse.StatusCode}。");
+                UpdateStatus(SyncStatus.Error, $"todo请求返回 HTTP {(int)listResponse.StatusCode}。");
                 return;
             }
 
@@ -660,8 +660,8 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or NotSupportedException)
         {
-            _logger.LogError(ex, "Hermes 待办列表请求失败。");
-            UpdateStatus(SyncStatus.Error, $"待办列表请求失败：{ex.Message}");
+            _logger.LogError(ex, "todo请求失败。");
+            UpdateStatus(SyncStatus.Error, $"todo请求失败：{ex.Message}");
             return;
         }
 
@@ -689,7 +689,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
         _settings.LastSyncedAt = serverCreatedAt.ToOffset(UtcTimeOffset.Offset).ToString("O", CultureInfo.InvariantCulture);
         await _settingsRepo.SaveAsync(_settings);
 
-        _logger.LogInformation("已从服务器拉取 {Count} 条待办；上次同步时间更新为 {CreatedAt}。",
+        _logger.LogInformation("已从服务器拉取 {Count} 条todo；上次同步时间更新为 {CreatedAt}。",
             pulled.Count, _settings.LastSyncedAt);
         UpdateStatus(SyncStatus.Success, null);
         RefreshPendingSyncCount();
@@ -701,7 +701,7 @@ public sealed partial class HermesSyncService : ObservableObject, IHermesSyncSer
     /// </summary>
     private async Task PushPendingOnlyAsync()
     {
-        _logger.LogInformation("服务器 todo.json 创建时间不晚于上次同步；推送本地待处理项。");
+        _logger.LogInformation("服务器 todo.json 创建时间不晚于上次同步；推送本地todo。");
         EnqueuePendingAsUpdated();
         await DispatchCoreAsync();
         if (PendingSyncCount == 0)
