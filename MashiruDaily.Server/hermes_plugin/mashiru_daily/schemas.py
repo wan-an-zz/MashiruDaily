@@ -3,7 +3,7 @@
 
 TODO_LIST = {
     "name": "todo_list",
-    "description": "读取 MashiruDaily 服务器端的 data/todo.json，返回全部待办列表。文件缺失时返回空列表。",
+    "description": "读取 MashiruDaily 服务器端的 data/todo.json，返回全部待办列表。文件缺失或todo.json为空时返回空列表。",
     "parameters": {
         "type": "object",
         "properties": {},
@@ -41,31 +41,44 @@ TODO_SAVE = {
 
 TODO_UPSERT = {
     "name": "todo_upsert",
-    "description": "按 id 更新已有待办的标题；未传 id 或 id 为空时新增一条待办。",
+    "description": "同步客户端完整待办或新增待办",
     "parameters": {
         "type": "object",
         "properties": {
             "title": {"type": "string", "description": "待办标题"},
+            "is_completed": {"type": "boolean", "description": "是否已完成"},
             "id": {
                 "type": "string",
-                "description": "已存在待办的 id（GUID）；省略或为空时表示新增",
+                "description": "待办 id（GUID），已存在则更新，不存在则新建该 id 的待办，为空则自动生成id",
             },
+            "completed_at": {
+                "type": ["string", "null"],
+                "description": "完成时间（ISO 8601，与客户端同步；未完成时为 null）",
+            },
+            "created_at": {
+                "type": ["string", "null"],
+                "description": "创建的时间, 为空则自动生成"
+            }
         },
-        "required": ["title"],
+        "required": ["title", "is_completed"],
         "additionalProperties": False,
     },
 }
 
 TODO_COMPLETED = {
     "name": "todo_completed",
-    "description": "修改已有待办的完成状态。接收已存在的 id（GUID）和 completed 布尔值。",
+    "description": "修改已有待办的完成状态。接收 id、completed 和 completed_at；completed_at 与客户端同步。",
     "parameters": {
         "type": "object",
         "properties": {
             "id": {"type": "string", "description": "已存在待办的 id（GUID）"},
             "completed": {"type": "boolean", "description": "是否已完成"},
+            "completed_at": {
+                "type": ["string", "null"],
+                "description": "完成时间（ISO 8601，与客户端同步；重开时为 null）",
+            },
         },
-        "required": ["id", "completed"],
+        "required": ["id", "completed", "completed_at"],
         "additionalProperties": False,
     },
 }
@@ -93,7 +106,7 @@ TODO_META_GET = {
 
 TODO_META_STAMP = {
     "name": "todo_meta_stamp",
-    "description": "刷新 data/todo-meta.json：更新 date 为今日、created_at 为当前 UTC、count 为实时条数。仅在每日例行维护结束时调用。",
+    "description": "刷新 data/todo-meta.json：更新 date 为今日、created_at 为当前 UTC+8、count 为实时条数。仅在每日例行维护结束时调用。",
     "parameters": {
         "type": "object",
         "properties": {},

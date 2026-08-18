@@ -1,4 +1,5 @@
 using System;
+using MashiruDaily.Core.Services;
 
 namespace MashiruDaily.Core.Models;
 
@@ -19,7 +20,7 @@ public sealed class TodoItem
     /// </summary>
     public bool HasSynced { get; set; }
 
-    public DateTime CreatedAt { get; init; } = DateTime.Now;
+    public DateTime CreatedAt { get; init; } = UtcTimeOffset.Now;
 
     public DateTime? CompletedAt { get; set; }
 }

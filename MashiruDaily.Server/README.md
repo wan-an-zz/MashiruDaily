@@ -10,7 +10,7 @@ MashiruDaily.Server 是一个轻量 Python 后端，承担两个职责：一是*
 
 同步拓扑（权威契约见 `docs/design/通信协议.md`）：
 
-- 客户端 → Hermes：带 HMAC-SHA256 签名的 webhook POST，地址 `http://<主机>:8644/webhooks/todo-sync`，由 Hermes 内置网关处理，据此更新 `todo.json`。
+- 客户端 → Hermes：带 HMAC-SHA256 签名的 webhook POST（JSON 数组，单次最多 15 个事件），地址 `http://<主机>:8644/webhooks/todo-sync`，由 Hermes 内置网关处理，据此更新 `todo.json`。
 - 客户端 → 本服务器：`GET /api/todo/meta` 与 `GET /api/todo`，只读，不修改任何服务器状态。
 
 ## 2. 目录结构
@@ -202,18 +202,18 @@ sudo .venv/bin/python install_autostart.py --uninstall     # 删除自启
 | `id` | string (GUID) | 条目唯一标识 |
 | `title` | string | 标题 |
 | `is_completed` | bool | 是否已完成 |
-| `created_at` | string (ISO 8601) | 创建时间 |
-| `completed_at` | string (ISO 8601) 或 null | 完成时间，未完成时为 null |
+| `created_at` | string (ISO 8601 UTC+8) | 创建时间 |
+| `completed_at` | string (ISO 8601 UTC+8) 或 null | 完成时间，未完成时为 null |
 
 `todo_save` 在覆盖写入前会自动把旧 `todo.json` 存档到 `data/backups/todo-<时间戳>-<随机后缀>.json`。
 
 **`data/todo-meta.json`**：恰好三个字段：
 
 ```json
-{ "date": "2026-08-10", "created_at": "2026-08-10T09:00:00Z", "count": 12 }
+{ "date": "2026-08-10", "created_at": "2026-08-10T17:00:00+08:00", "count": 12 }
 ```
 
-`date` 为当日日期（yyyy-MM-dd，兼容保留）；`created_at` 为 ISO 8601 UTC（Z 结尾，兼容 C# 端 AssumeUniversal 解析）；`count` 为实时条数。
+`date` 为当日日期（yyyy-MM-dd，兼容保留）；`created_at` 为 ISO 8601 UTC+8（带 `+08:00` 偏移，兼容 C# 端解析）；`count` 为实时条数。
 
 **`data/plan.md`**：每日计划，由 Hermes Agent 维护。边界行为：`todo.json` 缺失时 `GET /api/todo` 返回空数组，非法 JSON 返回 500；侧车缺失时首次请求 meta 自动创建。
 
@@ -227,7 +227,7 @@ pytest MashiruDaily.Server/tests -v
 
 覆盖：meta 结构合法、`GET /api/todo` 逐字回显 snake_case 且无 `has_synced`、空目录返回空数组、首次请求自动建侧车、非法 JSON 返回 500、webhook 式编辑不改 created_at 而 stamp 会改、count 实时反映条数，以及 `hermes_plugin` 的 `todo_*` 工具读写/upsert/completed/delete/stamp 行为。已全部通过。
 
-另可运行 `tools/test_webhook_signed.py` 做端到端冒烟：向 Hermes 网关 `:8644/webhooks/todo-sync` 发送签名事件（`--secret` 必填），2xx 即成功；`--negative` 用错误密钥验证网关返回 401。
+另可运行 `tools/test_webhook_signed.py` 做端到端冒烟：向 Hermes 网关 `:8644/webhooks/todo-sync` 发送批量签名事件（`--secret` 必填），2xx 即成功；`--negative` 用错误密钥验证网关返回 401。
 
 ## 9. 端口
 

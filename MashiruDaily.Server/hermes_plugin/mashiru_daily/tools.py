@@ -4,18 +4,17 @@
 - 只依赖 Python 标准库，便于 Hermes 进程直接加载；
 - 所有 handler 都返回 JSON 字符串，错误也以 JSON 返回，绝不向上抛异常；
 - 落盘沿用原子写（tmp + os.replace），避免半截文件；
-- 与 app/todo_store.py 的语义保持一致：todo-meta.json 的 created_at 只能由
-  todo_meta_stamp 刷新。
-- id/created_at/completed_at 统一由程序生成或维护，Hermes Agent 不自行编造；
-  只有更新/完成已有条目时可传入已存在的 id 用于定位。
+- todo-meta.json 的 created_at 只能由todo_meta_stamp 刷新。
 """
 
 import json
 import os
 import shutil
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+CST = timezone(timedelta(hours=8), name="UTC+8")
 
 
 def _server_root() -> Path:
@@ -41,14 +40,14 @@ def _meta_path() -> Path:
     return _data_dir() / "todo-meta.json"
 
 
-def _now_utc_iso() -> str:
-    """当前 UTC 时间的 ISO8601 字符串，以 Z 结尾（与 C# 端 AssumeUniversal 解析兼容）。"""
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+def _now_cst_iso() -> str:
+    """当前 UTC+8 时间的 ISO8601 字符串，带 +08:00 偏移（与 C# 端解析兼容）。"""
+    return datetime.now(CST).isoformat()
 
 
-def _today_local() -> str:
-    """今日本地日期，格式 yyyy-MM-dd。"""
-    return datetime.now().strftime("%Y-%m-%d")
+def _today_cst() -> str:
+    """当前 UTC+8 日期，格式 yyyy-MM-dd。"""
+    return datetime.now(CST).strftime("%Y-%m-%d")
 
 
 def _atomic_write_json(path: Path, data) -> None:
@@ -75,14 +74,20 @@ def _load_todo_list() -> list:
     return data
 
 
-def _new_item(title: str) -> dict:
-    """根据标题生成一条完整待办：id/created_at 由程序生成，completed_at 初始为 null。"""
+def _new_item(
+    title: str,
+    created_at: str | None = None,
+    item_id: str | None = None,
+    is_completed: bool = False,
+    completed_at: str | None = None
+) -> dict:
+    """根据标题生成一条完整待办；id 默认由程序生成，传入 item_id 时使用该 id；is_completed/completed_at 供 webhook 同步场景透传。"""
     return {
-        "id": str(uuid.uuid4()),
+        "id": item_id if item_id is not None else str(uuid.uuid4()),
         "title": title,
-        "is_completed": False,
-        "created_at": _now_utc_iso(),
-        "completed_at": None,
+        "is_completed": is_completed,
+        "created_at": created_at if created_at is not None else _now_cst_iso(),
+        "completed_at": completed_at,
     }
 
 
@@ -111,8 +116,8 @@ def _load_or_init_meta() -> dict:
             raise ValueError(f"todo-meta.json 结构不合法（{path}）：需要 date/created_at/count 三键")
         return data
     meta = {
-        "date": _today_local(),
-        "created_at": _now_utc_iso(),
+        "date": _today_cst(),
+        "created_at": _now_cst_iso(),
         "count": len(_load_todo_list()),
     }
     _atomic_write_json(path, meta)
@@ -130,10 +135,10 @@ def _current_meta() -> dict:
 
 
 def _stamp_meta() -> dict:
-    """刷新 todo-meta.json：date=今日、created_at=当前 UTC、count=实时条数。"""
+    """刷新 todo-meta.json：date=今日、created_at=当前 UTC+8、count=实时条数。"""
     meta = {
-        "date": _today_local(),
-        "created_at": _now_utc_iso(),
+        "date": _today_cst(),
+        "created_at": _now_cst_iso(),
         "count": len(_load_todo_list()),
     }
     _atomic_write_json(_meta_path(), meta)
@@ -193,21 +198,48 @@ def todo_save(args: dict, **kwargs) -> str:
 
 
 def todo_upsert(args: dict, **kwargs) -> str:
-    """按 id 更新已有待办标题；未传 id 或 id 为空时新增待办。"""
+    """同步客户端完整待办或新增待办。必填 title、is_completed；id/completed_at/created_at 可空。"""
     try:
         title = args.get("title")
         if not isinstance(title, str) or not title.strip():
             return _err("参数 title 必须是非空字符串")
-        item_id = str(args.get("id") or "").strip()
+        item_id = args.get("id")
+        if item_id is not None:
+            if not isinstance(item_id, str):
+                return _err("参数 id 必须是字符串或 null")
+            item_id = item_id.strip() or None
+        is_completed = args.get("is_completed")
+        if not isinstance(is_completed, bool):
+            return _err("参数 is_completed 必须是布尔值")
+        completed_at = args.get("completed_at")
+        if completed_at is not None:
+            if not isinstance(completed_at, str):
+                return _err("参数 completed_at 必须是字符串或 null")
+            completed_at = completed_at.strip() or None
+        created_at_arg = args.get("created_at")
+        if created_at_arg is not None:
+            if not isinstance(created_at_arg, str):
+                return _err("参数 created_at 必须是字符串或 null")
+            created_at_arg = created_at_arg.strip() or None
         items = _load_todo_list()
-        if item_id:
-            for index, existing in enumerate(items):
-                if existing.get("id") == item_id:
-                    items[index] = {**existing, "title": title}
-                    _atomic_write_json(_todo_path(), items)
-                    return _ok({"success": True, "created": False, "item": items[index], "count": len(items)})
-            return _ok({"success": False, "found": False, "id": item_id})
-        item = _new_item(title)
+        for index, existing in enumerate(items):
+            if existing.get("id") == item_id:
+                items[index] = {
+                    **existing,
+                    "title": title,
+                    "is_completed": is_completed,
+                    "completed_at": completed_at if "completed_at" in args else existing.get("completed_at"),
+                    "created_at": created_at_arg if created_at_arg is not None else existing.get("created_at"),
+                }
+                _atomic_write_json(_todo_path(), items)
+                return _ok({"success": True, "created": False, "item": items[index], "count": len(items)})
+        item = _new_item(
+            title,
+            item_id=item_id,
+            is_completed=is_completed,
+            completed_at=completed_at,
+            created_at=created_at_arg,
+        )
         items.append(item)
         _atomic_write_json(_todo_path(), items)
         return _ok({"success": True, "created": True, "item": item, "count": len(items)})
@@ -216,7 +248,7 @@ def todo_upsert(args: dict, **kwargs) -> str:
 
 
 def todo_completed(args: dict, **kwargs) -> str:
-    """按 id 修改待办完成状态；completed_at 由程序生成或清空。"""
+    """按 id 修改待办完成状态；completed_at 与客户端传入值同步，不再由程序生成。"""
     try:
         item_id = str(args.get("id") or "")
         if not item_id:
@@ -224,11 +256,16 @@ def todo_completed(args: dict, **kwargs) -> str:
         completed = args.get("completed")
         if not isinstance(completed, bool):
             return _err("参数 completed 必须是布尔值")
+        if "completed_at" not in args:
+            return _err("缺少参数 completed_at")
+        completed_at = args.get("completed_at")
+        if completed_at is not None and not isinstance(completed_at, str):
+            return _err("参数 completed_at 必须是字符串或 null")
         items = _load_todo_list()
         for item in items:
             if item.get("id") == item_id:
                 item["is_completed"] = completed
-                item["completed_at"] = _now_utc_iso() if completed else None
+                item["completed_at"] = completed_at
                 _atomic_write_json(_todo_path(), items)
                 return _ok({"success": True, "item": item, "count": len(items)})
         return _ok({"success": False, "found": False, "id": item_id})

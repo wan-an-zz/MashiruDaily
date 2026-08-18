@@ -112,7 +112,7 @@ def _monkey_urlopen(monkeypatch, responses: dict):
 def _valid_meta_body() -> bytes:
     """构造合法的 /api/todo/meta 响应体（含 created_at）。"""
     return json.dumps(
-        {"date": "2026-08-14", "created_at": "2026-08-14T01:00:00Z", "count": 0}
+        {"date": "2026-08-14", "created_at": "2026-08-14T09:00:00+08:00", "count": 0}
     ).encode("utf-8")
 
 

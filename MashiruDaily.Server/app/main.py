@@ -7,11 +7,38 @@
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from json import loads
 
 from app.config import get_settings
 from app.todo_store import current_meta, load_todo_list
+from hermes_plugin.mashiru_daily.tools import todo_upsert, todo_delete
 
 app = FastAPI()
+
+class Items(BaseModel):
+    '''update_todo_items接受的请求'''
+    event_type: str
+    events: list[Item]
+
+class Item(BaseModel):
+    event_type: str
+    timestamp: str
+    payload: todo_item
+
+class todo_item(BaseModel):
+    '''单条todo'''
+    id: str
+    title: str
+    is_completed: bool
+    created_at: str
+    completed_at: str | None
+
+class update_todo_msg(BaseModel):
+    '''update_todo_items的Response。若存在一条todo推送出现错误，success为False。success = True时，error_ids成员数为0'''
+    success: bool
+    error_ids: list[str] = []
+    success_ids: list[str] = []
 
 
 @app.exception_handler(ValueError)
@@ -36,6 +63,46 @@ def get_todo_list() -> list:
 def health() -> dict:
     """健康检查（拉取服务器自身；Hermes Webhook 网关另有 8644 端口上的 /health）。"""
     return {"status": "ok"}
+
+@app.post("/api/update")
+async def update_todo_items(items: Items):
+    err_item_ids = []
+    success_item_ids = []
+    for item in items.events:
+        if item.event_type != "todo_deleted":
+            status = loads(todo_upsert({
+                "title": item.payload.title,
+                "id": item.payload.id,
+                "is_completed": item.payload.is_completed,
+                "completed_at": item.payload.completed_at,
+                "created_at": item.payload.created_at
+            }))
+
+        else:
+            status = loads(todo_delete({"id": item.payload.id}))
+
+        if isinstance(status, dict):
+            ok = status.get("success")
+            if isinstance(ok, bool) and ok == True:
+                success_item_ids.append(item.payload.id)
+                continue
+            elif isinstance(ok, bool) and ok == False:
+                err_item_ids.append(item.payload.id)
+                continue
+            else:
+                return JSONResponse(status_code=500, content=update_todo_msg(success=False).model_dump())
+        else:
+            return JSONResponse(status_code=500, content=update_todo_msg(success=False).model_dump())
+
+
+    if len(err_item_ids) == 0:
+        return update_todo_msg(success=True, success_ids=success_item_ids).model_dump()
+    else:
+        return JSONResponse(status_code=500, content=
+            update_todo_msg(success=False, error_ids=err_item_ids, success_ids=success_item_ids).model_dump())
+
+
+
 
 
 if __name__ == "__main__":

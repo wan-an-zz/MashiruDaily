@@ -2,11 +2,13 @@
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TypedDict
 
 from app.config import get_settings
+
+CST = timezone(timedelta(hours=8), name="UTC+8")
 
 
 class TodoRecord(TypedDict):
@@ -37,15 +39,14 @@ def _meta_json_path() -> Path:
     return get_settings().data_dir / "todo-meta.json"
 
 
-def _now_utc_iso() -> str:
-    """当前 UTC 时间的 ISO8601 字符串，以 Z 结尾（如 2026-08-12T09:30:00.123456Z），
-    与 C# 端 DateTimeOffset.TryParse(..., AssumeUniversal) 兼容。"""
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+def _now_cst_iso() -> str:
+    """当前 UTC+8 时间的 ISO8601 字符串，带 +08:00 偏移（如 2026-08-12T17:30:00.123456+08:00）。"""
+    return datetime.now(CST).isoformat()
 
 
-def _today_local() -> str:
-    """今日本地日期，格式 yyyy-MM-dd。"""
-    return datetime.now().strftime("%Y-%m-%d")
+def _today_cst() -> str:
+    """当前 UTC+8 日期，格式 yyyy-MM-dd。"""
+    return datetime.now(CST).strftime("%Y-%m-%d")
 
 
 def load_todo_list() -> list[TodoRecord]:
@@ -86,14 +87,14 @@ def _write_meta_atomic(path: Path, meta: TodoMeta) -> None:
 
 
 def load_or_init_meta() -> TodoMeta:
-    """读取侧车；缺失时按当前数据初始化（date=今日、created_at=当前 UTC、count=实时条数）
+    """读取侧车；缺失时按当前数据初始化（date=今日、created_at=当前 UTC+8、count=实时条数）
     并原子写入后返回。已存在的侧车绝不覆盖。"""
     path = _meta_json_path()
     if path.exists():
         return _read_meta(path)
     meta: TodoMeta = {
-        "date": _today_local(),
-        "created_at": _now_utc_iso(),
+        "date": _today_cst(),
+        "created_at": _now_cst_iso(),
         "count": len(load_todo_list()),
     }
     _write_meta_atomic(path, meta)

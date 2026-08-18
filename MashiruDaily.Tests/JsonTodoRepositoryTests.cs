@@ -35,7 +35,7 @@ public class JsonTodoRepositoryTests : IDisposable
         var items = new[]
         {
             new TodoItem { Title = "写代码" },
-            new TodoItem { Title = "买菜", IsCompleted = true, CompletedAt = DateTime.Now, HasSynced = true },
+            new TodoItem { Title = "买菜", IsCompleted = true, CompletedAt = UtcTimeOffset.Now, HasSynced = true },
         };
 
         await _repository.SaveAsync(items);
@@ -46,11 +46,12 @@ public class JsonTodoRepositoryTests : IDisposable
         Assert.Equal(items[0].Title, loaded[0].Title);
         Assert.False(loaded[0].IsCompleted);
         Assert.False(loaded[0].HasSynced);
+        Assert.Equal(UtcTimeOffset.ToChinaWallClock(items[0].CreatedAt), loaded[0].CreatedAt);
         Assert.Equal(items[1].Title, loaded[1].Title);
         Assert.True(loaded[1].IsCompleted);
         Assert.NotNull(loaded[1].CompletedAt);
         Assert.True(loaded[1].HasSynced);
-        Assert.Equal(items[1].CreatedAt, loaded[1].CreatedAt);
+        Assert.Equal(UtcTimeOffset.ToChinaWallClock(items[1].CreatedAt), loaded[1].CreatedAt);
     }
 
     [Fact]

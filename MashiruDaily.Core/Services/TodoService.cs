@@ -97,7 +97,8 @@ public sealed class TodoService : ITodoService
     public Task ToggleAsync(TodoItem item)
     {
         item.IsCompleted = !item.IsCompleted;
-        item.CompletedAt = item.IsCompleted ? DateTime.Now : null;
+        item.CompletedAt = item.IsCompleted ? UtcTimeOffset.Now : null;
+        item.HasSynced = false;
         _logger.LogInformation("待办{State}：'{Title}' ({Id})。",
             item.IsCompleted ? "已完成" : "重新打开", item.Title, item.Id);
         OnChanged();
@@ -113,6 +114,7 @@ public sealed class TodoService : ITodoService
 
         var previous = item.Title;
         item.Title = trimmed;
+        item.HasSynced = false;
         _logger.LogInformation("待办已重命名：'{Previous}' -> '{New}' ({Id})。", previous, trimmed, item.Id);
         OnChanged();
         RequestFlush();

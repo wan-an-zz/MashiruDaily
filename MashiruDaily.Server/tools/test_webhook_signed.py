@@ -2,11 +2,11 @@
 # -*- coding: utf-8 -*-
 """对本地 Hermes Webhook 网关的冒烟测试脚本（仅标准库）。
 
-按 docs/design/通信协议.md 第 3 章的契约：
-- 向 POST {HermesBaseUrl}/webhooks/todo-sync 发送一个 todo_added 事件；
+按当前 MashiruDaily 客户端批量请求体（协议文档待同步）：
+- 向 POST {HermesBaseUrl}/webhooks/todo-sync 发送一个包含多个 todo 事件的 JSON 数组；
 - 请求头携带 X-Webhook-Timestamp（Unix 秒）、X-Webhook-Signature-V2
   （对 "{timestamp}.{rawBody}" 的 UTF-8 字节计算小写十六进制 HMAC-SHA256，
-  与 C# 客户端 HermesWebhookSigner 完全一致）、X-Request-ID（与事件体 event_id 相同）；
+  与 C# 客户端 HermesWebhookSigner 完全一致）、X-Request-ID（批量请求 ID）；
 - 2xx 视为接受成功，非 2xx 视为失败（退出码 1）；
 - --negative 模式下额外用错误密钥发送一次，验证网关返回 401（签名强制校验）。
 
@@ -24,7 +24,7 @@ import os
 import sys
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -36,35 +36,43 @@ PULL_TODO_URL = "http://localhost:8123/api/todo"
 # 单次 HTTP 请求超时（与客户端默认 TimeoutSeconds=10 一致）
 TIMEOUT_SECONDS = 10
 
-# 固定的测试客户端标识（协议要求 client_id 为每台设备固定的 UUID）
-TEST_CLIENT_ID = "00000000-0000-0000-0000-000000000001"
 
+def build_batch() -> tuple[str, bytes]:
+    """构造一个包含两个 todo 事件的批量请求体，返回 (batch_id, 原始请求字节)。
 
-def build_event() -> tuple[str, bytes]:
-    """构造 todo_added 事件体，返回 (event_id, 原始请求字节)。
-
-    - event_id 为新的 uuid4（与 X-Request-ID 保持一致）；
-    - 事件体字段为 snake_case（id/title/is_completed/created_at/completed_at），
-      payload 不含 has_synced（客户端本地字段，禁止传输）；
+    - batch_id 为本次批量请求的 UUID，放入 X-Request-ID；
+    - 事件体为 JSON 数组，字段为 snake_case（event_type/payload.id/payload.is_completed 等）；
+    - payload 不含 has_synced（客户端本地字段，禁止传输）；
     - 使用紧凑 JSON（separators=(",", ":")），ensure_ascii=False 以保留中文。
     """
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    event_id = str(uuid.uuid4())
-    event = {
-        "type": "todo_added",
-        "client_id": TEST_CLIENT_ID,
-        "event_id": event_id,
-        "timestamp": now,
-        "payload": {
-            "id": str(uuid.uuid4()),
-            "title": f"Webhook 冒烟测试 {now}",
-            "is_completed": False,
-            "created_at": now,
-            "completed_at": None,
+    now = datetime.now(timezone(timedelta(hours=8))).isoformat(timespec="seconds")
+    batch_id = str(uuid.uuid4())
+    events = [
+        {
+            "event_type": "todo_added",
+            "timestamp": now,
+            "payload": {
+                "id": str(uuid.uuid4()),
+                "title": f"Webhook 冒烟测试 {now}",
+                "is_completed": False,
+                "created_at": now,
+                "completed_at": None,
+            },
         },
-    }
-    raw_body = json.dumps(event, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    return event_id, raw_body
+        {
+            "event_type": "todo_completed",
+            "timestamp": now,
+            "payload": {
+                "id": str(uuid.uuid4()),
+                "title": f"Webhook 冒烟测试完成 {now}",
+                "is_completed": True,
+                "created_at": now,
+                "completed_at": now,
+            },
+        },
+    ]
+    raw_body = json.dumps(events, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return batch_id, raw_body
 
 
 def compute_signature(secret: str, timestamp: str, raw_body: bytes) -> str:
@@ -80,7 +88,7 @@ def compute_signature(secret: str, timestamp: str, raw_body: bytes) -> str:
     ).hexdigest()
 
 
-def post_webhook(url: str, secret: str, raw_body: bytes, event_id: str) -> tuple[int | None, str]:
+def post_webhook(url: str, secret: str, raw_body: bytes, request_id: str) -> tuple[int | None, str]:
     """发送签名后的 Webhook 请求，返回 (HTTP 状态码, 响应体文本)。
 
     网络异常时返回 (None, 错误描述)。
@@ -91,12 +99,12 @@ def post_webhook(url: str, secret: str, raw_body: bytes, event_id: str) -> tuple
         "Content-Type": "application/json",
         "X-Webhook-Timestamp": ts,
         "X-Webhook-Signature-V2": signature,
-        "X-Request-ID": event_id,
+        "X-Request-ID": request_id,
     }
     print(f"[信息] POST {url}")
     print(f"[信息] X-Webhook-Timestamp   = {ts}")
     print(f"[信息] X-Webhook-Signature-V2 = {signature}")
-    print(f"[信息] X-Request-ID          = {event_id}")
+    print(f"[信息] X-Request-ID          = {request_id}")
 
     request = Request(url, data=raw_body, headers=headers, method="POST")
     try:
@@ -127,26 +135,26 @@ def print_pull_commands() -> None:
 
 
 def run_positive_test(url: str, secret: str) -> bool:
-    """发送签名正确的事件，断言 2xx 接受；返回是否成功。"""
+    """发送签名正确的批量事件，断言 2xx 接受；返回是否成功。"""
     print("\n===== 正向测试：正确密钥签名 =====")
-    event_id, raw_body = build_event()
-    status, body = post_webhook(url, secret, raw_body, event_id)
+    request_id, raw_body = build_batch()
+    status, body = post_webhook(url, secret, raw_body, request_id)
     if status is None:
         print(f"[失败] 无法连接网关：{body}")
         return False
     if 200 <= status < 300:
-        print(f"[成功] 网关接受事件：HTTP {status}，响应：{body}")
+        print(f"[成功] 网关接受批量事件：HTTP {status}，响应：{body}")
         return True
     print(f"[失败] 网关拒绝事件：HTTP {status}，响应：{body}")
     return False
 
 
 def run_negative_test(url: str, secret: str) -> bool:
-    """用错误密钥发送事件，断言网关返回 401（签名强制校验）；返回是否通过。"""
+    """用错误密钥发送批量事件，断言网关返回 401（签名强制校验）；返回是否通过。"""
     print("\n===== 负向测试：错误密钥签名（预期 401）=====")
-    event_id, raw_body = build_event()
+    request_id, raw_body = build_batch()
     wrong_secret = "wrong-secret-" + secret
-    status, body = post_webhook(url, wrong_secret, raw_body, event_id)
+    status, body = post_webhook(url, wrong_secret, raw_body, request_id)
     if status is None:
         print(f"[失败] 无法连接网关：{body}")
         return False
@@ -160,7 +168,7 @@ def run_negative_test(url: str, secret: str) -> bool:
 def parse_args() -> argparse.Namespace:
     """解析命令行参数。"""
     parser = argparse.ArgumentParser(
-        description="向本地 Hermes Webhook 网关发送签名正确的 todo_added 事件并验证接受情况（冒烟测试）。",
+        description="向本地 Hermes Webhook 网关发送签名正确的批量 todo 事件并验证接受情况（冒烟测试）。",
     )
     parser.add_argument(
         "--secret",

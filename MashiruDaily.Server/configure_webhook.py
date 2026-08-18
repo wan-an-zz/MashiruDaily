@@ -131,13 +131,10 @@ def main(argv: list[str] | None = None) -> int:
 
     # 构造 todo-sync 路由
     prompt_text = (
-        "sync this todo change to todo.json:"
-        "event_type: {event_type}"
-        "id: {payload.id}"
-        "title: {payload.title}"
+        "跟随webhook-todo-sync skill，修改todo.json：{__raw__}"
     )
     desired_todo_sync = {
-        "events": TODO_SYNC_EVENTS,
+        "events": ["update"],
         "secret": secret,
         "prompt": _literal_scalar(prompt_text),
         "skills": ["webhook-todo-sync"],

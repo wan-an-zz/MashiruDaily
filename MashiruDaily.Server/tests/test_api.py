@@ -9,7 +9,7 @@ import json
 import os
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TypedDict
 
@@ -17,6 +17,7 @@ import pytest
 
 # Server 根目录：用于在用例内导入 hermes_plugin 的 todo_meta_stamp
 SERVER_ROOT = Path(__file__).resolve().parent.parent
+CST = timezone(timedelta(hours=8))
 
 
 class _TodoFixture(TypedDict):
@@ -74,7 +75,7 @@ def client(data_dir: Path):
 
 
 def test_meta_returns_valid_shape(client, data_dir) -> None:
-    """应返回 200：date 为 yyyy-MM-dd，created_at 为可解析的 ISO8601 UTC，count 为整数。"""
+    """应返回 200：date 为 yyyy-MM-dd，created_at 为可解析的 ISO8601 UTC+8，count 为整数。"""
     # Given: 空数据目录（无 todo.json、无侧车）
 
     # When: 请求元数据
@@ -84,7 +85,7 @@ def test_meta_returns_valid_shape(client, data_dir) -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", body["date"])
-    assert body["created_at"].endswith("Z") or body["created_at"].endswith("+00:00")
+    assert body["created_at"].endswith("+08:00")
     created_at = datetime.fromisoformat(body["created_at"])
     assert created_at.tzinfo is not None
     assert isinstance(body["count"], int)
@@ -223,10 +224,10 @@ def test_created_at_survives_webhook_edit_but_stamp_changes_it(client, data_dir)
     stamp_result = json.loads(todo_meta_stamp({}))
     assert stamp_result["success"] is True
 
-    # Then: created_at 已改变且为合法 UTC，date 为今日，count 匹配实时条数
+    # Then: created_at 已改变且为合法 UTC+8，date 为今日，count 匹配实时条数
     meta_after_stamp = client.get("/api/todo/meta").json()
     assert meta_after_stamp["created_at"] != created_before
-    assert meta_after_stamp["date"] == datetime.now().strftime("%Y-%m-%d")
+    assert meta_after_stamp["date"] == datetime.now(CST).strftime("%Y-%m-%d")
     assert meta_after_stamp["count"] == 2
 
 

@@ -17,6 +17,12 @@ namespace MashiruDaily.Core.Services;
 /// </summary>
 public sealed class JsonTodoRepository : ITodoRepository
 {
+    private static readonly JsonSerializerOptions StorageOptions = new()
+    {
+        WriteIndented = true,
+        Converters = { new LocalDateTimeJsonConverter() },
+    };
+
     private readonly ILogger<JsonTodoRepository> _logger;
 
     private readonly string _directory;
@@ -40,7 +46,7 @@ public sealed class JsonTodoRepository : ITodoRepository
                 return Task.FromResult<IReadOnlyList<TodoItem>>(Array.Empty<TodoItem>());
 
             var json = File.ReadAllText(_filePath);
-            var items = JsonSerializer.Deserialize<List<TodoItem>>(json);
+            var items = JsonSerializer.Deserialize<List<TodoItem>>(json, StorageOptions);
             return Task.FromResult<IReadOnlyList<TodoItem>>(items ?? new List<TodoItem>());
         }
         catch (Exception ex)
@@ -55,12 +61,7 @@ public sealed class JsonTodoRepository : ITodoRepository
         try
         {
             Directory.CreateDirectory(_directory);
-            var options = new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                Converters = { new LocalDateTimeJsonConverter() },
-            };
-            var json = JsonSerializer.Serialize(items, options);
+            var json = JsonSerializer.Serialize(items, StorageOptions);
             var tmp = _filePath + ".tmp";
             await File.WriteAllTextAsync(tmp, json);
             File.Move(tmp, _filePath, overwrite: true);

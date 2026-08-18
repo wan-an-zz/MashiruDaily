@@ -8,7 +8,7 @@
 import json
 import sys
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -19,6 +19,8 @@ if str(SERVER_ROOT) not in sys.path:
     sys.path.insert(0, str(SERVER_ROOT))
 
 from hermes_plugin.mashiru_daily import tools  # noqa: E402
+
+CST = timezone(timedelta(hours=8))
 
 
 def _invoke(handler, **kwargs) -> dict:
@@ -33,6 +35,7 @@ def _assert_valid_item(item: dict, title: str | None = None) -> None:
     assert item["title"]
     assert isinstance(item["is_completed"], bool)
     assert item["created_at"]
+    assert item["created_at"].endswith("+08:00")
     if title is not None:
         assert item["title"] == title
     if item["is_completed"]:
@@ -96,48 +99,83 @@ def test_todo_save_archives_existing_file_before_overwrite(plugin_data_dir) -> N
     assert [item["title"] for item in listed["items"]] == ["写周报"]
 
 
-def test_todo_upsert_adds_without_id(plugin_data_dir) -> None:
-    """todo_upsert 未传 id 时新增待办，id/created_at 由程序生成。"""
-    result = _invoke(tools.todo_upsert, title="买菜")
+def test_todo_upsert_without_id_generates_id(plugin_data_dir) -> None:
+    """todo_upsert 缺 id 时自动生成 id，并新增待办。"""
+    result = _invoke(tools.todo_upsert, title="买菜", is_completed=False)
+    assert result["success"] is True
+    assert result["created"] is True
+    uuid.UUID(result["item"]["id"])
+    assert result["item"]["title"] == "买菜"
+    assert result["item"]["is_completed"] is False
+
+
+def test_todo_upsert_requires_title(plugin_data_dir) -> None:
+    """todo_upsert 必须传入非空 title。"""
+    result = _invoke(tools.todo_upsert, id=str(uuid.uuid4()), title="", is_completed=False, completed_at=None)
+    assert result["success"] is False
+    assert "title" in result["error"]
+
+
+def test_todo_upsert_requires_is_completed(plugin_data_dir) -> None:
+    """todo_upsert 必须传入 is_completed。"""
+    result = _invoke(tools.todo_upsert, id=str(uuid.uuid4()), title="买菜", completed_at=None)
+    assert result["success"] is False
+    assert "is_completed" in result["error"]
+
+
+def test_todo_upsert_without_completed_at_defaults_null(plugin_data_dir) -> None:
+    """todo_upsert 缺 completed_at 时允许执行，新建条目的 completed_at 为 null。"""
+    result = _invoke(tools.todo_upsert, id=str(uuid.uuid4()), title="买菜", is_completed=False)
+    assert result["success"] is True
+    assert result["item"]["completed_at"] is None
+
+
+def test_todo_upsert_creates_with_new_id(plugin_data_dir) -> None:
+    """todo_upsert 传入不存在的 id 时新建该 id 的待办，id 不再由程序另生成。"""
+    item_id = str(uuid.uuid4())
+    result = _invoke(tools.todo_upsert, id=item_id, title="买菜", is_completed=False, completed_at=None)
     assert result["success"] is True
     assert result["created"] is True
     assert result["count"] == 1
     _assert_valid_item(result["item"], title="买菜")
+    assert result["item"]["id"] == item_id
 
 
 def test_todo_upsert_updates_title_with_existing_id(plugin_data_dir) -> None:
-    """todo_upsert 传入已存在 id 时只更新标题，保留原 id/created_at。"""
-    added = _invoke(tools.todo_upsert, title="买菜")
-    item_id = added["item"]["id"]
+    """todo_upsert 传入已存在 id 时更新标题/完成状态/完成时间，保留原 id/created_at。"""
+    item_id = str(uuid.uuid4())
+    added = _invoke(tools.todo_upsert, id=item_id, title="买菜", is_completed=False, completed_at=None)
     created_at = added["item"]["created_at"]
+    completed_at = "2026-08-17T18:00:00+08:00"
 
-    updated = _invoke(tools.todo_upsert, id=item_id, title="买菜并记账")
+    updated = _invoke(
+        tools.todo_upsert,
+        id=item_id,
+        title="买菜并记账",
+        is_completed=True,
+        completed_at=completed_at,
+    )
     assert updated["success"] is True
     assert updated["created"] is False
     assert updated["item"]["id"] == item_id
     assert updated["item"]["title"] == "买菜并记账"
     assert updated["item"]["created_at"] == created_at
-    assert updated["item"]["is_completed"] is False
-
-
-def test_todo_upsert_rejects_unknown_id(plugin_data_dir) -> None:
-    """todo_upsert 传入不存在的 id 时不创建新记录，避免 Agent 编造 id。"""
-    result = _invoke(tools.todo_upsert, id="不存在", title="测试")
-    assert result["success"] is False
-    assert result["found"] is False
+    assert updated["item"]["is_completed"] is True
+    assert updated["item"]["completed_at"] == completed_at
 
 
 def test_todo_completed_marks_complete_and_reopens(plugin_data_dir) -> None:
-    """todo_completed 修改完成状态，completed_at 由程序生成或清空。"""
-    added = _invoke(tools.todo_upsert, title="买菜")
+    """todo_completed 修改完成状态，completed_at 与客户端传入值同步。"""
+    added = _invoke(tools.todo_upsert, id=str(uuid.uuid4()), title="买菜", is_completed=False, completed_at=None)
     item_id = added["item"]["id"]
+    completed_at = "2026-08-17T18:00:00+08:00"
 
-    done = _invoke(tools.todo_completed, id=item_id, completed=True)
+    done = _invoke(tools.todo_completed, id=item_id, completed=True, completed_at=completed_at)
     assert done["success"] is True
     assert done["item"]["is_completed"] is True
-    assert done["item"]["completed_at"] is not None
+    assert done["item"]["completed_at"] == completed_at
 
-    reopened = _invoke(tools.todo_completed, id=item_id, completed=False)
+    reopened = _invoke(tools.todo_completed, id=item_id, completed=False, completed_at=None)
     assert reopened["success"] is True
     assert reopened["item"]["is_completed"] is False
     assert reopened["item"]["completed_at"] is None
@@ -145,15 +183,22 @@ def test_todo_completed_marks_complete_and_reopens(plugin_data_dir) -> None:
 
 def test_todo_completed_rejects_missing_id(plugin_data_dir) -> None:
     """todo_completed 找不到 id 时返回 success=false。"""
-    result = _invoke(tools.todo_completed, id="不存在", completed=True)
+    result = _invoke(tools.todo_completed, id="不存在", completed=True, completed_at=None)
     assert result["success"] is False
     assert result["found"] is False
 
 
 def test_todo_completed_rejects_non_bool(plugin_data_dir) -> None:
     """todo_completed 的 completed 必须是布尔值。"""
-    result = _invoke(tools.todo_completed, id="x", completed="yes")
+    result = _invoke(tools.todo_completed, id="x", completed="yes", completed_at=None)
     assert result["success"] is False
+
+
+def test_todo_completed_requires_completed_at(plugin_data_dir) -> None:
+    """todo_completed 必须传入 completed_at。"""
+    result = _invoke(tools.todo_completed, id=str(uuid.uuid4()), completed=True)
+    assert result["success"] is False
+    assert "completed_at" in result["error"]
 
 
 def test_todo_delete_removes_by_id(plugin_data_dir) -> None:
@@ -193,7 +238,7 @@ def test_todo_meta_stamp_changes_created_at(plugin_data_dir) -> None:
     assert stamped["success"] is True
     assert stamped["meta"]["count"] == 1
     assert stamped["meta"]["created_at"] != before
-    assert stamped["meta"]["date"] == datetime.now().strftime("%Y-%m-%d")
+    assert stamped["meta"]["date"] == datetime.now(CST).strftime("%Y-%m-%d")
 
 
 def test_todo_save_rejects_non_string_title(plugin_data_dir) -> None:

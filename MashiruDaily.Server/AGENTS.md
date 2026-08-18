@@ -33,7 +33,7 @@ pytest MashiruDaily.Server/tests -v     # 完全离线
 - **原子写**：`tools.py` 与 `todo_store.py` 一律先写 `.tmp` 再 `os.replace`。
 - **数据形状**：`todo.json` 顶层必须是数组、侧车键完整，否则统一 `ValueError` → 500 JSON `detail`（不许 KeyError 裸崩）。
 - **错误以 JSON 字符串返回**：`hermes_plugin` 的 handler 绝不向上抛异常。
-- 时间戳 ISO8601 以 `Z` 结尾（与 C# 端 AssumeUniversal 解析兼容）。
+- 时间戳统一为 ISO8601 UTC+8，带 `+08:00` 偏移（与 C# 端解析兼容）。
 
 ## ANTI-PATTERNS（代码注释里钉死的坑）
 
