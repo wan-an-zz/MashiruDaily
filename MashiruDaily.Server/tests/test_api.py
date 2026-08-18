@@ -251,3 +251,118 @@ def test_meta_count_is_live(client, data_dir) -> None:
 
     # Then: count 实时反映为 3
     assert client.get("/api/todo/meta").json()["count"] == 3
+
+
+def _update_envelope(event_type: str, item: _TodoFixture) -> dict:
+    """构造一条与 C# 端 HermesSyncService.SendAsync 逐字段一致的推送事件。
+
+    客户端序列化使用 snake_case：event_type / timestamp / payload 三层嵌套，
+    payload 内恰为 id/title/is_completed/created_at/completed_at 五个字段。
+    """
+    return {
+        "event_type": event_type,
+        "timestamp": "2026-08-18T09:00:00+08:00",
+        "payload": dict(item),
+    }
+
+
+def _update_body(*events: dict) -> dict:
+    """构造 POST /api/update 的请求体：顶层 event_type + events 数组。"""
+    return {"event_type": "update", "events": list(events)}
+
+
+def test_update_upserts_todo_list(client, data_dir) -> None:
+    """POST /api/update 推送 todo_updated 应 200，返回 success_ids，且新条目落入 todo.json。"""
+    # Given: 服务器已有 1 条待办
+    _atomic_write(
+        data_dir / "todo.json",
+        json.dumps([_item("1", "买牛奶")], ensure_ascii=False),
+    )
+
+    # When: 客户端推送一条新待办（todo_updated 视为 upsert）
+    new_item = _item("2", "写周报")
+    resp = client.post("/api/update", json=_update_body(_update_envelope("todo_updated", new_item)))
+
+    # Then: 200，success_ids 包含新 id，error_ids 为空，todo.json 已追加
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["success"] is True
+    assert body["success_ids"] == ["2"]
+    assert body["error_ids"] == []
+    assert client.get("/api/todo").json() == [_item("1", "买牛奶"), new_item]
+
+
+def test_update_deletes_todo(client, data_dir) -> None:
+    """POST /api/update 推送 todo_deleted 应 200，并从 todo.json 移除该条目。"""
+    # Given: 服务器已有 2 条待办
+    _atomic_write(
+        data_dir / "todo.json",
+        json.dumps([_item("1", "买牛奶"), _item("2", "写周报")], ensure_ascii=False),
+    )
+
+    # When: 客户端推送删除 id=1
+    resp = client.post("/api/update", json=_update_body(_update_envelope("todo_deleted", _item("1", "买牛奶"))))
+
+    # Then: 200 且仅剩 id=2
+    assert resp.status_code == 200
+    assert resp.json()["success"] is True
+    assert resp.json()["success_ids"] == ["1"]
+    assert client.get("/api/todo").json() == [_item("2", "写周报")]
+
+
+def test_update_batch_mixed_upsert_and_delete(client, data_dir) -> None:
+    """单批同时含 upsert 与 delete 事件时应逐条生效，全部计入 success_ids。"""
+    # Given: 服务器已有 2 条待办
+    _atomic_write(
+        data_dir / "todo.json",
+        json.dumps([_item("1", "买牛奶"), _item("2", "写周报")], ensure_ascii=False),
+    )
+
+    # When: 同一批推送新增 id=3 与删除 id=1
+    new_item = _item("3", "买菜")
+    resp = client.post(
+        "/api/update",
+        json=_update_body(
+            _update_envelope("todo_updated", new_item),
+            _update_envelope("todo_deleted", _item("1", "买牛奶")),
+        ),
+    )
+
+    # Then: 200，两条 id 均在 success_ids，列表为 [id=2, id=3]
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["success"] is True
+    assert sorted(body["success_ids"]) == ["1", "3"]
+    assert client.get("/api/todo").json() == [_item("2", "写周报"), new_item]
+
+
+def test_update_delete_missing_id_returns_500_error_ids(client, data_dir) -> None:
+    """删除不存在的 id 应返回 500，body 携带 error_ids，且 todo.json 保持不变。
+
+    回归防护：todo_delete 对缺失 id 返回 success=False，端点必须把它映射到
+    error_ids 并返回 500，而不是把 500 留给异常兜底。
+    """
+    # Given: 服务器已有 1 条待办
+    _atomic_write(
+        data_dir / "todo.json",
+        json.dumps([_item("1", "买牛奶")], ensure_ascii=False),
+    )
+
+    # When: 客户端推送删除不存在的 id=999
+    resp = client.post("/api/update", json=_update_body(_update_envelope("todo_deleted", _item("999", "幽灵"))))
+
+    # Then: 500，error_ids 含 999，数据未被改动
+    assert resp.status_code == 500
+    body = resp.json()
+    assert body["success"] is False
+    assert body["error_ids"] == ["999"]
+    assert client.get("/api/todo").json() == [_item("1", "买牛奶")]
+
+
+def test_update_rejects_malformed_body(client, data_dir) -> None:
+    """请求体缺少必需字段（如 events 缺失）应返回 422（FastAPI 校验兜底）。"""
+    # When: 推送空对象
+    resp = client.post("/api/update", json={})
+
+    # Then: 422
+    assert resp.status_code == 422

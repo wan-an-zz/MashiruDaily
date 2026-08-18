@@ -16,16 +16,6 @@ from hermes_plugin.mashiru_daily.tools import todo_upsert, todo_delete
 
 app = FastAPI()
 
-class Items(BaseModel):
-    '''update_todo_items接受的请求'''
-    event_type: str
-    events: list[Item]
-
-class Item(BaseModel):
-    event_type: str
-    timestamp: str
-    payload: todo_item
-
 class todo_item(BaseModel):
     '''单条todo'''
     id: str
@@ -33,6 +23,16 @@ class todo_item(BaseModel):
     is_completed: bool
     created_at: str
     completed_at: str | None
+
+class Item(BaseModel):
+    event_type: str
+    timestamp: str
+    payload: todo_item
+
+class Items(BaseModel):
+    '''update_todo_items接受的请求'''
+    event_type: str
+    events: list[Item]
 
 class update_todo_msg(BaseModel):
     '''update_todo_items的Response。若存在一条todo推送出现错误，success为False。success = True时，error_ids成员数为0'''
