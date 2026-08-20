@@ -21,7 +21,7 @@ description: 每日待办布置：读取每日任务计划（plan-daily.md），
 | 每日计划制定（daily-planning）              | 将阶段目标拆解为每日任务                | plan-daily.md               |
 | 每日待办布置(**todo-assigning**)（本 Skill） | 把当日任务 + 前日未完成任务写入 todo.json | todo.json（MashiruDaily 数据源） |
 
-> 所有文件的产出位置均为 `$HOME/.mashiru-daily/`
+> 所有文件的产出位置均为 `$HOME/.mashiru-daily/plans`
 
 **todo ≠ 计划。** 本 Skill 只按 plan-daily.md 里的既有任务搬运，不新增、不修改、不删减任务内容；任务内容有疑问找「每日计划制定」Skill 的产出核对。
 
