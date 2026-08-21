@@ -1,4 +1,6 @@
-"""Hermes 插件工具实现：读写 MashiruDaily.Server 的 data/todo.json 与 data/todo-meta.json。
+"""Hermes 插件工具实现：读写 MashiruDaily 数据目录下的 todo.json 与 todo-meta.json。
+
+数据目录默认在 $HOME/.mashiru-daily/todos/（可用环境变量 MASHIRU_DATA_DIR 覆盖）。
 
 设计约束：
 - 只依赖 Python 标准库，便于 Hermes 进程直接加载；
@@ -17,29 +19,24 @@ from pathlib import Path
 CST = timezone(timedelta(hours=8), name="UTC+8")
 
 
-def _server_root() -> Path:
-    """返回 MashiruDaily.Server 根目录（hermes_plugin/mashiru_daily 的上三级）。"""
-    return Path(__file__).resolve().parent.parent.parent
-
-
 def _data_dir() -> Path:
-    """返回数据目录：优先环境变量 MASHIRU_DATA_DIR，否则 Server/data。"""
+    """返回数据目录：优先环境变量 MASHIRU_DATA_DIR，否则 $HOME/.mashiru-daily/todos。"""
     env = os.environ.get("MASHIRU_DATA_DIR")
     if env:
         return Path(env)
-    return _server_root() / "data"
+    return Path.home() / ".mashiru-daily" / "todos"
 
 def _msg_path() -> Path:
-    """返回 data/msg.json 路径。"""
+    """返回数据目录下的 messages-to-user.json 路径。"""
     return _data_dir() / "messages-to-user.json"
 
 def _todo_path() -> Path:
-    """返回 data/todo.json 路径。"""
+    """返回数据目录下的 todo.json 路径。"""
     return _data_dir() / "todo.json"
 
 
 def _meta_path() -> Path:
-    """返回 data/todo-meta.json 路径。"""
+    """返回数据目录下的 todo-meta.json 路径。"""
     return _data_dir() / "todo-meta.json"
 
 
@@ -64,7 +61,7 @@ def _atomic_write_json(path: Path, data) -> None:
 
 
 def _load_todo_list() -> list:
-    """读取 data/todo.json；文件缺失返回空列表，非法 JSON 或顶层非数组抛 ValueError。"""
+    """读取数据目录下的 todo.json；文件缺失返回空列表，非法 JSON 或顶层非数组抛 ValueError。"""
     path = _todo_path()
     if not path.exists():
         return []
@@ -95,7 +92,7 @@ def _new_item(
 
 
 def _archive_todo_before_overwrite() -> Path | None:
-    """覆盖前将现有 todo.json 存档到 data/backups/todo-<时间戳>-<随机后缀>.json；无文件时返回 None。"""
+    """覆盖前将现有 todo.json 存档到数据目录的 backups/todo-<时间戳>-<随机后缀>.json；无文件时返回 None。"""
     src = _todo_path()
     if not src.exists():
         return None
@@ -159,7 +156,7 @@ def _err(message) -> str:
 
 
 def todo_list(args: dict, **kwargs) -> str:
-    """读取 data/todo.json 全量列表。"""
+    """读取数据目录下的 todo.json 全量列表。"""
     try:
         return _ok({"success": True, "items": _load_todo_list()})
     except Exception as exc:
@@ -181,7 +178,7 @@ def todo_get(args: dict, **kwargs) -> str:
 
 
 def todo_save(args: dict, **kwargs) -> str:
-    """整体覆盖写入 data/todo.json：覆盖前先将旧文件存档到 data/backups，再执行写入。"""
+    """整体覆盖写入数据目录下的 todo.json：覆盖前先将旧文件存档到 backups，再执行写入。"""
     try:
         titles = args.get("items")
         if titles is None:
@@ -293,7 +290,7 @@ def todo_delete(args: dict, **kwargs) -> str:
 
 
 def todo_meta_get(args: dict, **kwargs) -> str:
-    """读取 data/todo-meta.json 元数据（缺失时初始化）。"""
+    """读取数据目录下的 todo-meta.json 元数据（缺失时初始化）。"""
     try:
         return _ok({"success": True, "meta": _current_meta()})
     except Exception as exc:
@@ -301,7 +298,7 @@ def todo_meta_get(args: dict, **kwargs) -> str:
 
 
 def todo_meta_stamp(args: dict, **kwargs) -> str:
-    """刷新 data/todo-meta.json 的 created_at 与 count。"""
+    """刷新数据目录下的 todo-meta.json 的 created_at 与 count。"""
     try:
         return _ok({"success": True, "meta": _stamp_meta()})
     except Exception as exc:

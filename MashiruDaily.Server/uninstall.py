@@ -13,7 +13,7 @@
     5. 移除 Hermes 插件注册（CLI disable + config.yaml 的 plugins.enabled /
        skills.external_dirs 条目 + plugins 目录链接，链接指向非本插件源时绝不删除）；
     6. 删除虚拟环境 .venv；
-    7. 删除数据目录 data/（todo.json / todo-meta.json / plan.md / backups，
+    7. 删除数据目录 $HOME/.mashiru-daily/todos（todo.json / todo-meta.json / plan.md / backups，
        删除前要求确认，--yes 跳过）。
 
 与 bootstrap.py 的 fail-fast 不同：卸载步骤相互独立、尽力而为——单个步骤失败
@@ -55,6 +55,10 @@ PLUGIN_SOURCE_DIR = "hermes_plugin/mashiru_daily"
 LEGACY_SKILLS_DIR = "skills"
 # webhook 路由名（与 configure_webhook.py 一致）
 WEBHOOK_ROUTE = "todo-sync"
+
+# 默认数据目录：$HOME/.mashiru-daily/todos（与 app/config.py 的 DEFAULT_DATA_DIR 一致）。
+# 在模块导入期求值一次，避免运行期被 os.name monkeypatch 影响（Path.home() 依赖 os.name）。
+DEFAULT_DATA_DIR = Path.home() / ".mashiru-daily" / "todos"
 
 # 执行失败 / 需要用户手动操作 的汇总记录（main 末尾统一输出）
 _FAILURES: list[str] = []
@@ -515,8 +519,11 @@ def _remove_venv(dry_run: bool, keep: bool, venv_dir: Path) -> bool:
 
 
 def _remove_data(dry_run: bool, keep: bool, yes: bool) -> bool:
-    """删除数据目录（todo.json / todo-meta.json / plan.md / backups）。"""
-    data_dir = Path(os.environ.get("MASHIRU_DATA_DIR", str(SERVER_ROOT / "data")))
+    """删除数据目录（todo.json / todo-meta.json / plan.md / backups）。
+
+    默认数据目录为 $HOME/.mashiru-daily/todos，可用环境变量 MASHIRU_DATA_DIR 覆盖。
+    """
+    data_dir = Path(os.environ.get("MASHIRU_DATA_DIR", str(DEFAULT_DATA_DIR)))
     if keep:
         print(f"[SKIP] 已保留数据目录（--keep-data）：{data_dir}")
         return True
@@ -603,7 +610,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--venv", default=".venv", help="虚拟环境目录名（默认 .venv）")
     parser.add_argument("--dry-run", action="store_true", help="演练：只打印将执行的命令，不实际执行")
     parser.add_argument("--yes", "-y", action="store_true", help="跳过所有确认提示（默认删除数据目录前需确认）")
-    parser.add_argument("--keep-data", action="store_true", help="保留数据目录 data/")
+    parser.add_argument("--keep-data", action="store_true", help="保留数据目录 $HOME/.mashiru-daily/todos")
     parser.add_argument("--keep-venv", action="store_true", help="保留虚拟环境 .venv")
     parser.add_argument("--no-stop", action="store_true", help="不停止运行中的服务器进程")
     parser.add_argument("--no-restart", action="store_true", help="不自动重启 Hermes 网关（仅打印命令）")

@@ -1,6 +1,6 @@
 name: mashiru-daily
 version: 1.0.0
-description: MashiruDaily.Server 数据工具插件：封装 todo.json 与 todo-meta.json 的读写，供 Hermes 维护服务器端待办数据
+description: MashiruDaily 数据工具插件：封装 todo.json 与 todo-meta.json 的读写，供 Hermes 维护服务器端待办数据
 author: MashiruDaily
 license: MIT
 provides_tools:

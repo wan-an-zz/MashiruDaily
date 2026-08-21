@@ -12,8 +12,9 @@ from typing import Final
 # 以不同的工作目录启动，cwd 不可信。
 SERVER_ROOT: Final[Path] = Path(__file__).resolve().parent.parent
 
-# 默认数据目录：<Server 根>/data（todo.json / todo-meta.json 所在地）
-DEFAULT_DATA_DIR: Final[Path] = SERVER_ROOT / "data"
+# 默认数据目录：$HOME/.mashiru-daily/todos（todo.json / todo-meta.json 所在地）。
+# 从项目文件夹 data/ 迁移而来：数据不再与源码仓库耦合，且不受 cwd / 部署位置影响。
+DEFAULT_DATA_DIR: Final[Path] = Path.home() / ".mashiru-daily" / "todos"
 
 
 @dataclass(frozen=True, slots=True)

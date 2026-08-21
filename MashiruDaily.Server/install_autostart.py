@@ -378,7 +378,8 @@ def _cron_line(enabled: bool) -> str:
     root = _server_root()
     python = _venv_python()
     marker = _CRON_MARKER if enabled else _CRON_DISABLED_MARKER
-    return f"@reboot cd {root} && {python} -m app.main >> {root / 'data' / 'autostart.log'} 2>&1 {marker}"
+    log_dir = Path.home() / ".mashiru-daily" / "todos"
+    return f"@reboot cd {root} && {python} -m app.main >> {log_dir / 'autostart.log'} 2>&1 {marker}"
 
 
 def _find_cron_line(lines: list) -> tuple:
@@ -437,6 +438,8 @@ def _install_crontab(args) -> int:
     if args.dry_run:
         print("[DRY-RUN] 跳过写入 crontab。")
         return 0
+    # 预创建日志目录，确保 @reboot 时 `>>` 重定向不因目录缺失而失败
+    (Path.home() / ".mashiru-daily" / "todos").mkdir(parents=True, exist_ok=True)
     return _write_crontab(lines + [new_line])
 
 

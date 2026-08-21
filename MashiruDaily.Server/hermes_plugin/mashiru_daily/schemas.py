@@ -3,7 +3,7 @@
 
 TODO_LIST = {
     "name": "todo_list",
-    "description": "读取 MashiruDaily 服务器端的 data/todo.json，返回全部待办列表。文件缺失或todo.json为空时返回空列表。",
+    "description": "读取todo.json，返回全部待办列表。文件缺失或todo.json为空时返回空列表。",
     "parameters": {
         "type": "object",
         "properties": {},
@@ -12,7 +12,7 @@ TODO_LIST = {
 
 TODO_GET = {
     "name": "todo_get",
-    "description": "按 id 从 data/todo.json 中读取一条待办；不存在时返回 success=false。",
+    "description": "按 id读取一条待办；不存在时返回 success=false。",
     "parameters": {
         "type": "object",
         "properties": {
@@ -24,7 +24,7 @@ TODO_GET = {
 
 TODO_SAVE = {
     "name": "todo_save",
-    "description": "整体覆盖写入 data/todo.json。",
+    "description": "整体覆盖写入todo.json。",
     "parameters": {
         "type": "object",
         "properties": {
@@ -85,7 +85,7 @@ TODO_COMPLETED = {
 
 TODO_DELETE = {
     "name": "todo_delete",
-    "description": "按 id 从 data/todo.json 中删除一条待办；不存在时返回 success=false。",
+    "description": "按 id 删除一条待办；不存在时返回 success=false。",
     "parameters": {
         "type": "object",
         "properties": {
@@ -97,7 +97,7 @@ TODO_DELETE = {
 
 TODO_META_GET = {
     "name": "todo_meta_get",
-    "description": "读取 data/todo-meta.json 元数据（date/created_at/count）。",
+    "description": "读取 todo-meta.json (`todo.json`的元数据)。",
     "parameters": {
         "type": "object",
         "properties": {},
@@ -106,7 +106,7 @@ TODO_META_GET = {
 
 TODO_META_STAMP = {
     "name": "todo_meta_stamp",
-    "description": "刷新 data/todo-meta.json：更新 date 为今日、created_at 为当前 UTC+8、count 为实时条数。仅在每日例行维护结束时调用。",
+    "description": "刷新 todo-meta.json：更新 date 为今日、created_at 为当前 UTC+8、count 为实时条数。仅在每日例行维护结束时调用。",
     "parameters": {
         "type": "object",
         "properties": {},

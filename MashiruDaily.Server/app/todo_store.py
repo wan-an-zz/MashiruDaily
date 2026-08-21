@@ -50,7 +50,7 @@ def _today_cst() -> str:
 
 
 def load_todo_list() -> list[TodoRecord]:
-    """读取 data/todo.json：文件缺失返回空列表；JSON 非法或顶层非数组抛 ValueError。"""
+    """读取数据目录下的 todo.json：文件缺失返回空列表；JSON 非法或顶层非数组抛 ValueError。"""
     path = _todo_json_path()
     if not path.exists():
         return []

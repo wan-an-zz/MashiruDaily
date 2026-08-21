@@ -6,7 +6,7 @@
 
 MashiruDaily.Server 是一个轻量 Python 后端，承担两个职责：一是**拉取服务器**，以 FastAPI 提供两个只读 GET 端点，供 MashiruDaily 客户端（Avalonia 桌面 / Android / TUI）上线时拉取权威当日待办列表；二是**Hermes 装配工具集**，一键把本机安装的 Hermes Agent 配置为可接收 webhook、每日维护 todo.json 的智能体（示例 skill、每日 cron、物理开机自启）。
 
-数据位于 `data/`：`todo.json`（snake_case 字段）是服务器侧唯一数据源，`todo-meta.json` 是侧车文件，专为客户端拉取决策记录 `created_at`。服务器对数据只读，真正的写者是 Hermes Agent（每日 cron 例行更新 + webhook 事件即时更新）。
+数据位于 `$HOME/.mashiru-daily/todos/`：`todo.json`（snake_case 字段）是服务器侧唯一数据源，`todo-meta.json` 是侧车文件，专为客户端拉取决策记录 `created_at`。服务器对数据只读，真正的写者是 Hermes Agent（每日 cron 例行更新 + webhook 事件即时更新）。数据目录可用环境变量 `MASHIRU_DATA_DIR` 覆盖。
 
 同步拓扑（权威契约见 `docs/design/通信协议.md`）：
 
@@ -36,7 +36,7 @@ MashiruDaily.Server/
 │   ├── test_api.py          GET 端点契约的 pytest 集成测试（离线）
 │   ├── test_hermes_plugin.py  hermes_plugin todo_* 工具离线测试
 │   └── ...
-├── setup_server.py          一次性初始化：创建 .venv、安装依赖、初始化 data/、盖章初始 meta（幂等）
+├── setup_server.py          一次性初始化：创建 .venv、安装依赖、初始化 $HOME/.mashiru-daily/todos、盖章初始 meta（幂等）
 ├── register_hermes_plugin.py       安装/链接 hermes_plugin 到 Hermes 并启用插件，注册外部 skill 目录（幂等）
 ├── configure_webhook.py     配置 Hermes webhook 平台与 todo-sync 路由（幂等，需密钥）
 ├── configure_cron.py        创建每日 Hermes cron 任务 mashiru-daily（幂等）
@@ -80,7 +80,7 @@ python bootstrap.py --secret <密钥>
 python setup_server.py
 ```
 
-脚本依次完成四件事：创建虚拟环境 `.venv`（已存在则跳过）、用 `.venv` 的 pip 安装 `requirements.txt`、创建 `data/`、调用 `todo_meta_stamp` 生成初始侧车。可加 `--venv <目录名>` 自定义虚拟环境名。幂等可重复运行，若检测到已在虚拟环境中会给出警告。
+脚本依次完成四件事：创建虚拟环境 `.venv`（已存在则跳过）、用 `.venv` 的 pip 安装 `requirements.txt`、创建 `$HOME/.mashiru-daily/todos/`、调用 `todo_meta_stamp` 生成初始侧车。可加 `--venv <目录名>` 自定义虚拟环境名。幂等可重复运行，若检测到已在虚拟环境中会给出警告。
 
 **第二步：启动拉取服务器**：
 
@@ -139,7 +139,7 @@ $env:MASHIRU_WEBHOOK_SECRET = "<密钥>"
 .venv\Scripts\python.exe configure_webhook.py
 ```
 
-**configure_cron.py**：创建每日 Hermes cron 任务 `mashiru-daily`（默认每日 09:00，表达式 `0 9 * * *`）。提示词要求 Hermes 使用 `todo_*` 工具检查并更新 `data/todo.json` 与 `data/plan.md`，每次运行结束时调用 `todo_meta_stamp` 刷新 created_at；创建命令附带 `--skill mashiru-todo`。已存在则跳过。可选 `--name`、`--schedule`、`--workdir`：
+**configure_cron.py**：创建每日 Hermes cron 任务 `mashiru-daily`（默认每日 09:00，表达式 `0 9 * * *`）。提示词要求 Hermes 使用 `todo_*` 工具检查并更新数据目录（`$HOME/.mashiru-daily/todos`）下的 `todo.json` 与 `plan.md`，每次运行结束时调用 `todo_meta_stamp` 刷新 created_at；创建命令附带 `--skill mashiru-todo`。已存在则跳过。可选 `--name`、`--schedule`、`--workdir`：
 
 ```powershell
 .venv\Scripts\python.exe configure_cron.py
@@ -174,7 +174,7 @@ sudo .venv/bin/python install_autostart.py --uninstall     # 删除自启
 .venv/bin/python install_autostart.py --dry-run            # 演练：只打印命令不执行（无需 sudo）
 ```
 
-**uninstall.py**：一键卸载 MashiruDaily.Server 的**全部部署足迹**（bootstrap.py 的逆操作，幂等可重复运行），仅保留源码仓库本身。用系统 Python 运行（纯标准库）：先停止运行中的服务器进程（按命令行 `app.main` 匹配），再移除开机自启、删除 cron 任务 `mashiru-daily`、清理 config.yaml 的 todo-sync webhook 路由（`--no-restart` 可跳过网关重启）、移除 Hermes 插件注册（CLI disable + config.yaml 条目 + `$HERMES_HOME/plugins/mashiru-daily` 链接，链接指向非本插件源时**绝不删除**）、删除 `.venv` 与 `data/`（默认删除数据前需确认）。各步骤相互独立、尽力而为，失败步骤在末尾汇总。config.yaml 相关步骤依赖 ruamel.yaml：缺失时自动尝试从虚拟环境注入，仍不可用则跳过并给出手动清理指引。安装期生成的 `config.yaml.bak-<时间戳>` 备份一律保留：
+**uninstall.py**：一键卸载 MashiruDaily.Server 的**全部部署足迹**（bootstrap.py 的逆操作，幂等可重复运行），仅保留源码仓库本身。用系统 Python 运行（纯标准库）：先停止运行中的服务器进程（按命令行 `app.main` 匹配），再移除开机自启、删除 cron 任务 `mashiru-daily`、清理 config.yaml 的 todo-sync webhook 路由（`--no-restart` 可跳过网关重启）、移除 Hermes 插件注册（CLI disable + config.yaml 条目 + `$HERMES_HOME/plugins/mashiru-daily` 链接，链接指向非本插件源时**绝不删除**）、删除 `.venv` 与 `$HOME/.mashiru-daily/todos`（默认删除数据前需确认）。各步骤相互独立、尽力而为，失败步骤在末尾汇总。config.yaml 相关步骤依赖 ruamel.yaml：缺失时自动尝试从虚拟环境注入，仍不可用则跳过并给出手动清理指引。安装期生成的 `config.yaml.bak-<时间戳>` 备份一律保留：
 
 ```powershell
 python uninstall.py                          # 完整卸载（数据目录需确认）
@@ -193,7 +193,7 @@ python uninstall.py --dry-run                # 演练：只打印将执行的命
 
 ## 7. 数据文件
 
-**`data/todo.json`**：snake_case，与客户端本地 `todos.json` 字段完全一致，**不含 `has_synced`**（客户端本地字段，禁止传输）：
+**`$HOME/.mashiru-daily/todos/todo.json`**：snake_case，与客户端本地 `todos.json` 字段完全一致，**不含 `has_synced`**（客户端本地字段，禁止传输）：
 
 ```json
 [
@@ -215,9 +215,9 @@ python uninstall.py --dry-run                # 演练：只打印将执行的命
 | `created_at` | string (ISO 8601 UTC+8) | 创建时间 |
 | `completed_at` | string (ISO 8601 UTC+8) 或 null | 完成时间，未完成时为 null |
 
-`todo_save` 在覆盖写入前会自动把旧 `todo.json` 存档到 `data/backups/todo-<时间戳>-<随机后缀>.json`。
+`todo_save` 在覆盖写入前会自动把旧 `todo.json` 存档到 `$HOME/.mashiru-daily/todos/backups/todo-<时间戳>-<随机后缀>.json`。
 
-**`data/todo-meta.json`**：恰好三个字段：
+**`$HOME/.mashiru-daily/todos/todo-meta.json`**：恰好三个字段：
 
 ```json
 { "date": "2026-08-10", "created_at": "2026-08-10T17:00:00+08:00", "count": 12 }
@@ -225,7 +225,7 @@ python uninstall.py --dry-run                # 演练：只打印将执行的命
 
 `date` 为当日日期（yyyy-MM-dd，兼容保留）；`created_at` 为 ISO 8601 UTC+8（带 `+08:00` 偏移，兼容 C# 端解析）；`count` 为实时条数。
 
-**`data/plan.md`**：每日计划，由 Hermes Agent 维护。边界行为：`todo.json` 缺失时 `GET /api/todo` 返回空数组，非法 JSON 返回 500；侧车缺失时首次请求 meta 自动创建。
+**`$HOME/.mashiru-daily/todos/plan.md`**：每日计划，由 Hermes Agent 维护。边界行为：`todo.json` 缺失时 `GET /api/todo` 返回空数组，非法 JSON 返回 500；侧车缺失时首次请求 meta 自动创建。
 
 ## 8. 测试
 
