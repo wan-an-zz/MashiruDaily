@@ -1,6 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
-using MashiruDaily.ViewModels.Todo;
+using MashiruDaily.Core.ViewModels.Todo;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
@@ -15,9 +15,13 @@ namespace MashiruDaily.Tui.Views;
 internal sealed class TodoColumnView : View
 {
     private readonly string _header;
+
     private readonly ObservableCollection<TodoItemViewModel> _source;
+
     private readonly Label _headerLabel;
+
     private readonly View _listArea;
+
     private int _selectedIndex;
 
     public TodoColumnView(string header, ObservableCollection<TodoItemViewModel> source)

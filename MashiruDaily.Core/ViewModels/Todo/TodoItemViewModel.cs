@@ -1,30 +1,18 @@
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using MashiruDaily.Abstracts;
-using MashiruDaily.Models;
+using MashiruDaily.Core.Abstracts;
+using MashiruDaily.Core.Models;
 
-namespace MashiruDaily.ViewModels.Todo;
+namespace MashiruDaily.Core.ViewModels.Todo;
 
 /// <summary>
-/// Wraps a single <see cref="TodoItem"/> for presentation. Keeps the editing
-/// state (inline editing) and delegates all mutations to <see cref="ITodoService"/>.
+/// 包装单个 <see cref="TodoItem"/> 用于展示。维护编辑状态（行内编辑），
+/// 所有变更都委托给 <see cref="ITodoService"/>。
 /// </summary>
 public partial class TodoItemViewModel : ViewModelBase
 {
     private readonly ITodoService _service;
-
-    public TodoItemViewModel(TodoItem item, ITodoService service)
-    {
-        _service = service;
-        Item = item;
-        _title = item.Title;
-        _isCompleted = item.IsCompleted;
-        _editText = item.Title;
-    }
-
-    /// <summary>The underlying data item.</summary>
-    public TodoItem Item { get; }
 
     [ObservableProperty]
     private string _title;
@@ -38,9 +26,20 @@ public partial class TodoItemViewModel : ViewModelBase
     [ObservableProperty]
     private string _editText;
 
+    /// <summary>底层数据条目。</summary>
+    public TodoItem Item { get; }
+
+    public TodoItemViewModel(TodoItem item, ITodoService service)
+    {
+        _service = service;
+        Item = item;
+        _title = item.Title;
+        _isCompleted = item.IsCompleted;
+        _editText = item.Title;
+    }
+
     /// <summary>
-    /// Refreshes display fields from the underlying item. Called after the
-    /// service raises <see cref="ITodoService.Changed"/>.
+    /// 从底层条目刷新展示字段。服务触发 <see cref="ITodoService.Changed"/> 后调用。
     /// </summary>
     public void Sync()
     {

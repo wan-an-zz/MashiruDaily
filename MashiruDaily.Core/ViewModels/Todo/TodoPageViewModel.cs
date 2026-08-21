@@ -4,31 +4,20 @@ using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using MashiruDaily.Abstracts;
-using MashiruDaily.Models;
+using MashiruDaily.Core.Abstracts;
+using MashiruDaily.Core.Models;
 
-namespace MashiruDaily.ViewModels.Todo;
+namespace MashiruDaily.Core.ViewModels.Todo;
 
 /// <summary>
-/// Page view-model for the Todo feature. Splits the todos coming from
-/// <see cref="ITodoService"/> into a "pending" (待完成) and "completed"
-/// (已完成) category and exposes the add/edit/delete/toggle commands.
+/// Todo 功能的页面视图模型。将 <see cref="ITodoService"/> 的待办拆分为
+/// 「待完成」与「已完成」两类，并暴露新增、编辑、删除、切换完成状态的命令。
 /// </summary>
 public partial class TodoPageViewModel : ViewModelBase
 {
     private readonly ITodoService _service;
+
     private readonly Dictionary<TodoItem, TodoItemViewModel> _cache = new();
-
-    public TodoPageViewModel(ITodoService service)
-    {
-        _service = service;
-        _service.Changed += OnServiceChanged;
-        OnServiceChanged(this, EventArgs.Empty);
-    }
-
-    public ObservableCollection<TodoItemViewModel> PendingTodos { get; } = new();
-
-    public ObservableCollection<TodoItemViewModel> CompletedTodos { get; } = new();
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(AddCommand))]
@@ -45,6 +34,17 @@ public partial class TodoPageViewModel : ViewModelBase
 
     [ObservableProperty]
     private bool _hasCompleted;
+
+    public ObservableCollection<TodoItemViewModel> PendingTodos { get; } = new();
+
+    public ObservableCollection<TodoItemViewModel> CompletedTodos { get; } = new();
+
+    public TodoPageViewModel(ITodoService service)
+    {
+        _service = service;
+        _service.Changed += OnServiceChanged;
+        OnServiceChanged(this, EventArgs.Empty);
+    }
 
     [RelayCommand(CanExecute = nameof(CanAdd))]
     private async Task Add()

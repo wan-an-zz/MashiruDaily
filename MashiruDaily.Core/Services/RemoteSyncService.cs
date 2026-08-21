@@ -1,0 +1,739 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.ComponentModel;
+using MashiruDaily.Core.Abstracts;
+using MashiruDaily.Core.Converters;
+using MashiruDaily.Core.Models;
+using Microsoft.Extensions.Logging;
+
+namespace MashiruDaily.Core.Services;
+
+/// <summary>
+/// Hermes AI 同步后台任务。监听 <see cref="ITodoService"/> 的变更，
+/// 将变更作为已签名的 Webhook 事件推送到 Hermes，并实现通信协议中定义的
+/// 启动「先比对服务器创建时间，再决定推拉」流程。维护最近观测数据的值快照，
+/// 以便在不动 <c>TodoService</c> 自身锁的情况下做差异对比。
+/// </summary>
+public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncService
+{
+    private static class EventTypes
+    {
+        public const string Added = "todo_added";
+
+        public const string Updated = "todo_updated";
+
+        public const string Completed = "todo_completed";
+
+        public const string Reopened = "todo_reopened";
+
+        public const string Deleted = "todo_deleted";
+    }
+
+    private sealed record PendingEvent(TodoItem Snapshot, string Type);
+
+    /// <summary>
+    /// 拉取决策：是否需要拉取，以及服务器 todo.json 的创建时间（统一 UTC+8）。
+    /// </summary>
+    private sealed record MetaResult(bool NeedPull, DateTimeOffset ServerCreatedAt);
+
+    private sealed class MetaDate
+    {
+        public string? Date { get; set; }
+
+        public string? CreatedAt { get; set; }
+    }
+
+    private static readonly JsonSerializerOptions SnakeCaseOption = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        Converters = { new LocalDateTimeJsonConverter() }
+    };
+
+    private readonly ITodoService _todoService;
+
+    private readonly IRemoteServerSettingsRepository _settingsRepo;
+
+    private readonly ILogger<RemoteSyncService> _logger;
+
+    private readonly HttpClient _httpClient;
+
+    private readonly SemaphoreSlim _gate = new(1, 1);
+
+    private readonly object _stateLock = new();
+
+    private readonly object _timerLock = new();
+
+    private readonly Dictionary<Guid, TodoItem> _snapshot = new();
+
+    private readonly Queue<PendingEvent> _pendingQueue = new();
+
+    private volatile bool _suppressChanged;
+
+    private volatile bool _initialized;
+
+    private int _dispatchRunning;
+
+    private RemoteServerSettings _settings = RemoteServerSettings.CreateDefault();
+
+    private Timer? _timer;
+
+    [ObservableProperty]
+    private SyncStatus _status;
+
+    [ObservableProperty]
+    private string? _lastError;
+
+    [ObservableProperty]
+    private int _pendingSyncCount;
+
+    /// <inheritdoc />
+    public event EventHandler? StatusChanged;
+
+    /// <summary>
+    /// 创建同步服务。订阅 <see cref="ITodoService.Changed"/>，
+    /// 以便自动对比并推送后续变更。
+    /// </summary>
+    /// <param name="todoService">待办数据的唯一来源，必须先初始化。</param>
+    /// <param name="settingsRepo">持久化的 Hermes 设置存储。</param>
+    /// <param name="logger">结构化日志器。</param>
+    /// <param name="httpClient">可选客户端（测试用）；缺省时创建默认实例。</param>
+    public RemoteSyncService(
+        ITodoService todoService,
+        IRemoteServerSettingsRepository settingsRepo,
+        ILogger<RemoteSyncService> logger,
+        HttpClient? httpClient = null)
+    {
+        _todoService = todoService;
+        _settingsRepo = settingsRepo;
+        _logger = logger;
+        _httpClient = httpClient ?? new HttpClient();
+        _todoService.Changed += OnServiceChanged;
+    }
+
+    /// <inheritdoc />
+    public async Task InitializeAsync()
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            await InitializeCoreAsync();
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task SyncNowAsync()
+    {
+        try
+        {
+            await _gate.WaitAsync();
+            try
+            {
+                if (!_initialized)
+                {
+                    await InitializeCoreAsync();
+                    return;
+                }
+
+                if (!_settings.SyncEnabled)
+                    return;
+
+                _logger.LogInformation("手动同步已请求");
+                var meta = await FetchMetaAsync();
+                if (meta is null)
+                    return;
+                if (meta.NeedPull)
+                {
+                    await PullTodoListAsync(meta.ServerCreatedAt);
+                    return;
+                }
+
+                await PushPendingOnlyAsync();
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Hermes 手动同步失败。");
+            UpdateStatus(SyncStatus.Error, ex.Message);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task FlushAsync()
+    {
+        try
+        {
+            await _gate.WaitAsync();
+            try
+            {
+                if (!_initialized || !_settings.SyncEnabled)
+                    return;
+
+                _logger.LogInformation("正在冲刷待处理的 Hermes 事件。");
+                EnqueuePendingAsUpdated();
+                await DispatchCoreAsync();
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Hermes 冲刷失败。");
+        }
+    }
+
+    private async Task InitializeCoreAsync()
+    {
+        if (_initialized)
+            return;
+
+        try
+        {
+            _settings = await _settingsRepo.LoadAsync();
+            _httpClient.Timeout = TimeSpan.FromSeconds(Math.Max(1, _settings.TimeoutSeconds));
+
+            lock (_stateLock)
+            {
+                _snapshot.Clear();
+                foreach (var item in _todoService.Items)
+                    _snapshot[item.Id] = Copy(item);
+            }
+
+            _initialized = true;
+
+            if (!_settings.SyncEnabled)
+            {
+                _logger.LogInformation("Hermes 同步已禁用；跳过初始化网络调用。");
+                UpdateStatus(SyncStatus.Idle, null);
+                return;
+            }
+
+            _logger.LogInformation("Hermes 同步已启用：先比对服务器创建时间，再决定推拉。");
+            var meta = await FetchMetaAsync();
+            if (meta is null)
+                return;
+            if (meta.NeedPull)
+            {
+                await PullTodoListAsync(meta.ServerCreatedAt);
+                return;
+            }
+
+            await PushPendingOnlyAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Hermes 同步初始化失败。");
+            UpdateStatus(SyncStatus.Error, ex.Message);
+        }
+    }
+
+    private void OnServiceChanged(object? sender, EventArgs e)
+    {
+        // 只做差异对比并入队（快速、无 I/O）；由后台分发循环消费队列。
+        if (_suppressChanged || !_initialized || !_settings.SyncEnabled)
+            return;
+
+        ActivateTimer();
+    }
+
+    private void ActivateTimer()
+    {
+        lock (_timerLock)
+        {
+            _timer?.Dispose();
+            _timer = new Timer(OnTick, null, TimeSpan.FromSeconds(5), Timeout.InfiniteTimeSpan);
+        }
+    }
+
+    private void OnTick(object? state)
+    {
+        _timer!.Dispose();
+        _timer = null;
+
+        if (DiffAndEnqueue() > 0)
+        {
+            RefreshPendingSyncCount();
+            _ = DispatchPendingAsync();
+        }
+    }
+
+    /// <summary>
+    /// 将当前条目与快照对比，每个变更入队一个事件。
+    /// </summary>
+    /// <returns>入队的事件数量。</returns>
+    private int DiffAndEnqueue()
+    {
+        var live = _todoService.Items;
+        int enqueued = 0;
+        var liveIds = new HashSet<Guid>(live.Count);
+
+        lock (_stateLock)
+        {
+            foreach (var item in live)
+            {
+                liveIds.Add(item.Id);
+                if (_snapshot.TryGetValue(item.Id, out var previous))
+                {
+                    if (previous.IsCompleted != item.IsCompleted)
+                    {
+                        EnqueueLocked(Copy(item),
+                            item.IsCompleted ? EventTypes.Completed : EventTypes.Reopened);
+                        item.HasSynced = false;
+                        enqueued++;
+                    }
+                    else if (!string.Equals(previous.Title, item.Title, StringComparison.Ordinal))
+                    {
+                        EnqueueLocked(Copy(item), EventTypes.Updated);
+                        item.HasSynced = false;
+                        enqueued++;
+                    }
+                }
+                else
+                {
+                    EnqueueLocked(Copy(item), EventTypes.Added);
+                    item.HasSynced = false;
+                    enqueued++;
+                }
+
+                _snapshot[item.Id] = Copy(item);
+            }
+
+            foreach (var id in _snapshot.Keys.Where(k => !liveIds.Contains(k)).ToList())
+            {
+                EnqueueLocked(_snapshot[id], EventTypes.Deleted);
+                _snapshot.Remove(id);
+                enqueued++;
+            }
+        }
+
+        return enqueued;
+    }
+
+    private void EnqueueLocked(TodoItem item, string eventType)
+        => _pendingQueue.Enqueue(new PendingEvent(item, eventType));
+
+    /// <summary>
+    /// 将每个 <c>HasSynced == false</c> 的现存条目作为 <c>todo_updated</c>
+    /// upsert 入队（用于启动、手动同步与关闭冲刷）。
+    /// </summary>
+    private void EnqueuePendingAsUpdated()
+    {
+        lock (_stateLock)
+        {
+            foreach (var item in _todoService.Items)
+            {
+                if (!item.HasSynced)
+                    _pendingQueue.Enqueue(new PendingEvent(Copy(item), EventTypes.Updated));
+            }
+        }
+
+        RefreshPendingSyncCount();
+    }
+
+    /// <summary>
+    /// 即发即忘入口：保证只有一个排空循环在运行，
+    /// 若在排空与守卫复位之间又有事件到达则自行重新触发。
+    /// </summary>
+    private async Task DispatchPendingAsync()
+    {
+        if (Interlocked.CompareExchange(ref _dispatchRunning, 1, 0) != 0)
+            return;
+
+        try
+        {
+            await _gate.WaitAsync();
+            try
+            {
+                await DispatchCoreAsync();
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "todo分发失败。");
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _dispatchRunning, 0);
+        }
+
+        if (HasPending())
+            _ = DispatchPendingAsync();
+    }
+
+    /// <summary>
+    /// 排空待处理队列，逐个发送事件（串行，限流安全）。
+    /// 调用方必须持有 <see cref="_gate"/>。
+    /// </summary>
+    private async Task DispatchCoreAsync()
+    {
+        while (true)
+        {
+            List<PendingEvent>? batch;
+            lock (_stateLock)
+            {
+                if (_pendingQueue.Count == 0)
+                    return;
+                batch = new List<PendingEvent>(_pendingQueue);
+                _pendingQueue.Clear();
+            }
+
+            try
+            {
+                // 限制每批推送最多发送 15 条todo
+                for (int i = 0; i < batch.Count; i += 15)
+                {
+                    await SendAsync(batch.Skip(i)
+                        .Take(15)
+                        .ToList());
+                }
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "推送todo到远端时发生错误");
+            }
+
+        }
+    }
+
+    private bool HasPending()
+    {
+        lock (_stateLock)
+        {
+            return _pendingQueue.Count > 0;
+        }
+    }
+
+    /// <summary>
+    /// 发送一批待办到 /api/update，最多重试
+    /// <see cref="RemoteServerSettings.MaxRetryAttempts"/> + 1 次。
+    /// 成功后将现存条目标记为已同步；全部失败则保持待处理。
+    /// </summary>
+    private async Task SendAsync(List<PendingEvent> items)
+    {
+        UpdateStatus(SyncStatus.Syncing, null);
+
+        // POST
+        var envelopes = new List<dynamic>();
+        var types = new List<string>();
+        var ids = new List<Guid>();
+
+        foreach (var item in items)
+        {
+            types.Add(item.Type);
+            ids.Add(item.Snapshot.Id);
+
+            envelopes.Add(new
+            {
+                eventType = item.Type,
+                timestamp = UtcTimeOffset.NowOffset.ToString("O", CultureInfo.InvariantCulture),
+                payload = new
+                {
+                    id = item.Snapshot.Id,
+                    title = item.Snapshot.Title,
+                    isCompleted = item.Snapshot.IsCompleted,
+                    createdAt = item.Snapshot.CreatedAt,
+                    completedAt = item.Snapshot.CompletedAt,
+                },
+            });
+        }
+        var body = new
+        {
+            eventType = "update",
+            events = envelopes,
+        };
+
+        var eventId = Guid.NewGuid();
+        var rawBody = JsonSerializer.Serialize(body, SnakeCaseOption);
+        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+        var signature = HermesWebhookSigner.ComputeSignature(_settings.WebhookSecret, timestamp, rawBody);
+        var url = $"{_settings.ServerBaseUrl.TrimEnd('/')}/api/update";
+
+        var totalAttempts = Math.Max(0, _settings.MaxRetryAttempts) + 1;
+
+        // 多次尝试
+        for (var attempt = 1; attempt <= totalAttempts; attempt++)
+        {
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Post, url);
+                request.Content = new StringContent(rawBody, Encoding.UTF8, "application/json");
+                request.Headers.TryAddWithoutValidation("X-Webhook-Timestamp", timestamp);
+                request.Headers.TryAddWithoutValidation("X-Webhook-Signature-V2", signature);
+                request.Headers.TryAddWithoutValidation("X-Request-ID", eventId.ToString());
+
+                using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation(
+                        "共 {Count} 个todo已被接收（HTTP {StatusCode}）。Types: {Types}。Ids:{Ids}",
+                        items.Count,  (int)response.StatusCode, string.Join("\n;", types),  string.Join("\n;", ids));
+                    await _todoService.MarkSyncedAsync(ids);
+
+                    RefreshPendingSyncCount();
+                    UpdateStatus(SyncStatus.Success, null);
+                    return;
+                }
+
+                if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                {
+                    _logger.LogWarning(
+                        "共 {Count} 个todo被限流（429），退避等待（第 {Attempt}/{Total} 次尝试）。",
+                        items.Count, attempt, totalAttempts);
+                    if (attempt < totalAttempts)
+                        await Task.Delay(TimeSpan.FromSeconds(2));
+                    continue;
+                }
+
+                if (response.StatusCode == HttpStatusCode.InternalServerError)
+                {
+                    var content = await response.Content.ReadAsStringAsync();
+                    var template = new
+                    {
+                        success = false,
+                        ErrorIds = new List<string>(),
+                        SuccessIds = new List<string>()
+                    };
+
+                    try
+                    {
+                        dynamic? r = JsonSerializer.Deserialize(content, template.GetType(), SnakeCaseOption);
+                        if (r is null)
+                        {
+                            UpdateStatus(SyncStatus.Error, $"远端返回错误");
+                            _logger.LogError("Response反序列化失败，远端返回错误");
+                        }
+                        else
+                        {
+                            var errorIds = r.ErrorIds as List<string> ?? new List<string>();
+                            var successIds = r.SuccessIds as List<string> ?? new List<string>();
+                            var successes = new List<Guid>();
+
+                            _logger.LogError("共有 {Count} 个 Todo 推送错误。Ids: {Ids}", errorIds.Count, string.Join(",\n ", errorIds));
+
+                            foreach (var successId in successIds)
+                            {
+                                if (Guid.TryParse(successId, out var id))
+                                {
+                                    successes.Add(id);
+                                }
+                            }
+
+                            await _todoService.MarkSyncedAsync(successes);
+                            RefreshPendingSyncCount();
+                            UpdateStatus(SyncStatus.Error, $"有{errorIds.Count}个todo推送错误");
+                        }
+                    }
+                    catch (JsonException)
+                    {
+                        UpdateStatus(SyncStatus.Error, $"远端返回错误");
+                        _logger.LogError("Response反序列化失败，远端返回错误");
+                    }
+                    return;
+                }
+
+                _logger.LogWarning(
+                    "共 {Count} 个todo推送失败，HTTP {StatusCode}（第 {Attempt}/{Total} 次尝试）。Types: {Types}。Ids: {Ids}",
+                    items.Count, (int)response.StatusCode, attempt, totalAttempts,
+                    string.Join(", ", types), string.Join(", ", ids));
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                _logger.LogWarning(
+                    ex, "共 {Count} 个待办的 Webhook 网络错误（第 {Attempt}/{Total} 次尝试）。Types: {Types}。Ids: {Ids}",
+                    items.Count, attempt, totalAttempts,
+                    string.Join(", ", types), string.Join(", ", ids));
+            }
+        }
+
+        _logger.LogError(
+            "共 {Count} 个todo已用尽全部 {TotalAttempts} 次尝试；条目保持待处理。Types: {Types}。Ids: {Ids}",
+            items.Count, totalAttempts, string.Join(", ", types), string.Join(", ", ids));
+        UpdateStatus(SyncStatus.Error, $"共 {items.Count} 个待办的 Webhook 在 {totalAttempts} 次尝试后失败。");
+        RefreshPendingSyncCount();
+    }
+
+    /// <summary>
+    /// 请求服务器元数据，并依据 <c>createdAt</c> 与本地 <see cref="RemoteServerSettings.LastSyncedAt"/>
+    /// 决定是否需要拉取。调用方必须持有 <see cref="_gate"/>。
+    /// </summary>
+    /// <returns>
+    /// 拉取决策与服务器 todo.json 的创建时间；失败时置 <see cref="SyncStatus.Error"/> 并返回 null。
+    /// </returns>
+    private async Task<MetaResult?> FetchMetaAsync()
+    {
+        UpdateStatus(SyncStatus.Pulling, null);
+
+        var baseUrl = _settings.ServerBaseUrl.TrimEnd('/');
+        var metaUrl = $"{baseUrl}/api/todo/meta";
+
+        MetaDate? meta;
+        try
+        {
+            using var metaResponse = await _httpClient.GetAsync(metaUrl);
+            if (metaResponse.StatusCode != HttpStatusCode.OK)
+            {
+                UpdateStatus(SyncStatus.Error, $"元数据请求返回 HTTP {(int)metaResponse.StatusCode}。");
+                return null;
+            }
+
+            meta = await metaResponse.Content.ReadFromJsonAsync<MetaDate>(SnakeCaseOption);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or NotSupportedException)
+        {
+            _logger.LogError(ex, "todo-meta请求失败。");
+            UpdateStatus(SyncStatus.Error, $"请求失败：{ex.Message}");
+            return null;
+        }
+
+        if (meta?.CreatedAt is not { Length: > 0 } createdAt
+            || !DateTimeOffset.TryParse(createdAt, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal, out var parsed))
+        {
+            UpdateStatus(SyncStatus.Error, "元数据响应未包含有效的 created_at。");
+            return null;
+        }
+
+        var serverUtc = parsed.ToUniversalTime();
+
+        bool needPull;
+        if (string.IsNullOrWhiteSpace(_settings.LastSyncedAt))
+        {
+            needPull = true;
+        }
+        else if (!DateTimeOffset.TryParse(_settings.LastSyncedAt, CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal, out var lastSyncedAt))
+        {
+            needPull = true;
+        }
+        else
+        {
+            needPull = serverUtc > lastSyncedAt;
+        }
+
+        return new MetaResult(needPull, serverUtc);
+    }
+
+    /// <summary>
+    /// 拉取服务器整列表并整体替换本地集合，最后持久化
+    /// <see cref="RemoteServerSettings.LastSyncedAt"/> 为服务器创建时间。
+    /// 调用方必须持有 <see cref="_gate"/>。
+    /// </summary>
+    private async Task PullTodoListAsync(DateTimeOffset serverCreatedAt)
+    {
+        var baseUrl = _settings.ServerBaseUrl.TrimEnd('/');
+        var listUrl = $"{baseUrl}/api/todo";
+
+        List<TodoItem>? pulled;
+        try
+        {
+            using var listResponse = await _httpClient.GetAsync(listUrl);
+            if (listResponse.StatusCode != HttpStatusCode.OK)
+            {
+                UpdateStatus(SyncStatus.Error, $"todo请求返回 HTTP {(int)listResponse.StatusCode}。");
+                return;
+            }
+
+            pulled = await listResponse.Content.ReadFromJsonAsync<List<TodoItem>>(SnakeCaseOption);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or NotSupportedException)
+        {
+            _logger.LogError(ex, "todo请求失败。");
+            UpdateStatus(SyncStatus.Error, $"todo请求失败：{ex.Message}");
+            return;
+        }
+
+        pulled ??= new List<TodoItem>();
+        foreach (var item in pulled)
+            item.HasSynced = true;
+
+        _suppressChanged = true;
+        try
+        {
+            await _todoService.ReplaceAllAsync(pulled);
+        }
+        finally
+        {
+            _suppressChanged = false;
+        }
+
+        lock (_stateLock)
+        {
+            _snapshot.Clear();
+            foreach (var item in pulled)
+                _snapshot[item.Id] = Copy(item);
+        }
+
+        _settings.LastSyncedAt = serverCreatedAt.ToOffset(UtcTimeOffset.Offset).ToString("O", CultureInfo.InvariantCulture);
+        await _settingsRepo.SaveAsync(_settings);
+
+        _logger.LogInformation("已从服务器拉取 {Count} 条todo；上次同步时间更新为 {CreatedAt}。",
+            pulled.Count, _settings.LastSyncedAt);
+        UpdateStatus(SyncStatus.Success, null);
+        RefreshPendingSyncCount();
+    }
+
+    /// <summary>
+    /// 服务器 todo.json 创建时间不晚于上次同步时：仅推送本地待处理项。
+    /// 调用方必须持有 <see cref="_gate"/>。
+    /// </summary>
+    private async Task PushPendingOnlyAsync()
+    {
+        _logger.LogInformation("服务器 todo.json 创建时间不晚于上次同步；推送本地todo。");
+        EnqueuePendingAsUpdated();
+        await DispatchCoreAsync();
+        if (PendingSyncCount == 0)
+            UpdateStatus(SyncStatus.Success, null);
+    }
+
+    private void RefreshPendingSyncCount()
+    {
+        int count = _todoService.Items.Count(x => !x.HasSynced);
+        if (count != PendingSyncCount)
+        {
+            PendingSyncCount = count;
+            StatusChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private void UpdateStatus(SyncStatus newStatus, string? error)
+    {
+        if (Status == newStatus && LastError == error)
+            return;
+
+        Status = newStatus;
+        LastError = error;
+        StatusChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private static TodoItem Copy(TodoItem item) => new()
+    {
+        Id = item.Id,
+        Title = item.Title,
+        IsCompleted = item.IsCompleted,
+        CreatedAt = item.CreatedAt,
+        CompletedAt = item.CompletedAt,
+    };
+}

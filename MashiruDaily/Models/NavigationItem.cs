@@ -1,12 +1,11 @@
 using Avalonia.Media;
 using MashiruDaily.Abstracts;
-using MashiruDaily.ViewModels;
+using MashiruDaily.Core.ViewModels;
 
 namespace MashiruDaily.Models;
 
 /// <summary>
-/// Concrete <see cref="INavigationItem"/> used by both the desktop side menu
-/// and the mobile bottom navigation bar.
+/// 桌面侧边菜单与移动端底部导航栏共用的 <see cref="INavigationItem"/> 具体实现。
 /// </summary>
 public sealed class NavigationItem : INavigationItem
 {

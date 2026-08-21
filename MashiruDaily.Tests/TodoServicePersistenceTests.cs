@@ -2,34 +2,35 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using MashiruDaily.Abstracts;
-using MashiruDaily.Models;
-using MashiruDaily.Services;
+using MashiruDaily.Core.Abstracts;
+using MashiruDaily.Core.Models;
+using MashiruDaily.Core.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace MashiruDaily.Tests;
 
-public sealed class BlockingTodoRepository : ITodoRepository
+public sealed class BlockingTodoRepositoryService : ITodoRepositoryService
 {
     private readonly IReadOnlyList<TodoItem> _seed;
+
     private readonly object _lock = new();
+
     private readonly List<IReadOnlyList<TodoItem>> _saved = new();
+
     private readonly TaskCompletionSource _firstSaveStarted =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     private readonly TaskCompletionSource _releaseFirstSave =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     private int _saveCount;
+
     private int _activeSaves;
+
     private int _maxActiveSaves;
 
-    public BlockingTodoRepository(params TodoItem[] seed) => _seed = seed;
-
-    public Task<IReadOnlyList<TodoItem>> LoadAsync() => Task.FromResult(_seed);
-
     public Task FirstSaveStarted => _firstSaveStarted.Task;
-
-    public void ReleaseFirstSave() => _releaseFirstSave.TrySetResult();
 
     public int MaxActiveSaves
     {
@@ -42,6 +43,12 @@ public sealed class BlockingTodoRepository : ITodoRepository
     }
 
     public List<IReadOnlyList<TodoItem>> Saved => _saved;
+
+    public BlockingTodoRepositoryService(params TodoItem[] seed) => _seed = seed;
+
+    public Task<IReadOnlyList<TodoItem>> LoadAsync() => Task.FromResult(_seed);
+
+    public void ReleaseFirstSave() => _releaseFirstSave.TrySetResult();
 
     public async Task SaveAsync(IReadOnlyList<TodoItem> items)
     {
@@ -73,7 +80,7 @@ public sealed class BlockingTodoRepository : ITodoRepository
 public class TodoServicePersistenceTests
 {
     private static async Task WaitForSaveAsync(
-        BlockingTodoRepository repo, Func<IReadOnlyList<TodoItem>?, bool> predicate, int timeoutMs = 2000)
+        BlockingTodoRepositoryService repo, Func<IReadOnlyList<TodoItem>?, bool> predicate, int timeoutMs = 2000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
         while (true)
@@ -89,7 +96,7 @@ public class TodoServicePersistenceTests
     [Fact]
     public async Task InitializeAsync_LoadsSeedFromRepository()
     {
-        var repo = new BlockingTodoRepository(new TodoItem { Title = "seed" });
+        var repo = new BlockingTodoRepositoryService(new TodoItem { Title = "seed" });
         var service = new TodoService(repo, NullLogger<TodoService>.Instance);
 
         await service.InitializeAsync();
@@ -101,7 +108,7 @@ public class TodoServicePersistenceTests
     [Fact]
     public async Task Mutations_PersistFinalState()
     {
-        var repo = new BlockingTodoRepository();
+        var repo = new BlockingTodoRepositoryService();
         var service = new TodoService(repo, NullLogger<TodoService>.Instance);
         await service.InitializeAsync();
 
@@ -120,7 +127,7 @@ public class TodoServicePersistenceTests
     [Fact]
     public async Task RapidMutations_CoalesceIntoSingleFlush()
     {
-        var repo = new BlockingTodoRepository();
+        var repo = new BlockingTodoRepositoryService();
         var service = new TodoService(repo, NullLogger<TodoService>.Instance);
         await service.InitializeAsync();
 
@@ -140,7 +147,7 @@ public class TodoServicePersistenceTests
     public async Task Toggle_And_Rename_ArePersisted()
     {
         var item = new TodoItem { Title = "X" };
-        var repo = new BlockingTodoRepository(item);
+        var repo = new BlockingTodoRepositoryService(item);
         var service = new TodoService(repo, NullLogger<TodoService>.Instance);
         await service.InitializeAsync();
 
@@ -159,7 +166,7 @@ public class TodoServicePersistenceTests
     [Fact]
     public async Task Snapshot_IsAValueCopy_NotAffectedByLaterMutation()
     {
-        var repo = new BlockingTodoRepository();
+        var repo = new BlockingTodoRepositoryService();
         var service = new TodoService(repo, NullLogger<TodoService>.Instance);
         await service.InitializeAsync();
 
@@ -183,7 +190,7 @@ public class TodoServicePersistenceTests
     [Fact]
     public async Task FlushAsync_WaitsForPendingWrites()
     {
-        var repo = new BlockingTodoRepository();
+        var repo = new BlockingTodoRepositoryService();
         var service = new TodoService(repo, NullLogger<TodoService>.Instance);
         await service.InitializeAsync();
 

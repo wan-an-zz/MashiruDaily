@@ -2,7 +2,8 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
                  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-                 xmlns:assets="using:MashiruDaily.Assets"
+                  xmlns:assets="using:MashiruDaily.Assets"
+                  xmlns:controls="using:MashiruDaily.Controls"
                  xmlns:models="using:MashiruDaily.Models"
                  xmlns:suki="https://github.com/kikipoulet/SukiUI"
                  xmlns:vm="using:MashiruDaily.ViewModels"
@@ -22,12 +23,14 @@
                   Foreground="{DynamicResource SukiPrimaryColor}" />
     </suki:SukiWindow.LogoContent>
 
-    <suki:SukiSideMenu ItemsSource="{Binding NavigationItems}"
-                       SelectedItem="{Binding ActiveItem, Mode=TwoWay}"
-                       Content="{Binding ActiveItem.Page}"
-                       UseCustomContent="True"
-                       OpenPaneLength="230"
-                       IsSearchEnabled="False">
+    <DockPanel>
+        <controls:SyncStatusBar DockPanel.Dock="Bottom" />
+        <suki:SukiSideMenu ItemsSource="{Binding NavigationItems}"
+                           SelectedItem="{Binding ActiveItem, Mode=TwoWay}"
+                           Content="{Binding ActiveItem.Page}"
+                           UseCustomContent="True"
+                           OpenPaneLength="230"
+                           IsSearchEnabled="False">
 
         <suki:SukiSideMenu.ItemTemplate>
             <DataTemplate x:DataType="models:NavigationItem">
@@ -48,6 +51,7 @@
                            Foreground="{DynamicResource SukiPrimaryColor}" />
             </StackPanel>
         </suki:SukiSideMenu.HeaderContent>
-    </suki:SukiSideMenu>
+        </suki:SukiSideMenu>
+    </DockPanel>
 
 </suki:SukiWindow>

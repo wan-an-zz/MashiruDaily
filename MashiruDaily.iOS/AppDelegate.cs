@@ -7,13 +7,12 @@ using Avalonia.Media;
 
 namespace MashiruDaily.iOS;
 
-// The UIApplicationDelegate for the application. This class is responsible for launching the 
-// User Interface of the application, as well as listening (and optionally responding) to 
-// application events from iOS.
+// 应用的 UIApplicationDelegate。该类负责启动应用的用户界面，
+// 并监听（可选地响应）来自 iOS 的应用事件。
 [Register("AppDelegate")]
-#pragma warning disable CA1711 // Identifiers should not have incorrect suffix
+#pragma warning disable CA1711 // 标识符不应使用不正确的后缀
 public partial class AppDelegate : AvaloniaAppDelegate<App>
-#pragma warning restore CA1711 // Identifiers should not have incorrect suffix
+#pragma warning restore CA1711 // 标识符不应使用不正确的后缀
 {
     protected override AppBuilder CustomizeAppBuilder(AppBuilder builder)
     {

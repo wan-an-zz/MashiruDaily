@@ -1,4 +1,4 @@
-using MashiruDaily.ViewModels.Todo;
+using MashiruDaily.Core.ViewModels.Todo;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
@@ -9,7 +9,9 @@ namespace MashiruDaily.Tui.Views;
 internal sealed class MainWindow : Runnable
 {
     private readonly TodoPageViewModel _viewModel;
+
     private readonly TodoColumnView _pendingColumn;
+
     private readonly TodoColumnView _completedColumn;
 
     public MainWindow(TodoPageViewModel viewModel)
