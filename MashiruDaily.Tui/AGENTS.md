@@ -8,6 +8,13 @@ Guidance for AI coding agents (and humans) working in this project.
 > the linked canonical docs over your priors. When unsure, check the upstream sources below —
 > they are compiled by Terminal.Gui's CI, so they are correct and current.
 
+## 项目结构（本目录）
+
+- `Program.cs` — DI 装配（与 `MashiruDaily/App.axaml.cs` 同款 Core 注册：Todo 两件套 + Hermes 三件套 + HttpClient + `TodoPageViewModel`，**不含** Avalonia 专有的 `MainViewModel`/`SettingsPageViewModel`）+ 生命周期（`TodoService.InitializeAsync` → 即发即忘同步 → `Application.Create()/Init()/Run(MainWindow)` → Esc 退出冲刷）。
+- `Views/MainWindow.cs` — 根窗口；`TodoColumnView`（待完成/已完成双列）、`TodoRowView`（单行：勾选框 + 标题 + 删除按钮）。
+- 业务逻辑与 VM 全在 **`MashiruDaily.Core`**（`TodoPageViewModel`/`TodoItemViewModel` 直接消费，无 Avalonia 依赖）— 本目录只写视图与键盘路由，**别在 Tui 里复刻业务逻辑**。
+- `CLAUDE.md` 是指向本文件的桥接入口（同内容，不改逻辑）。
+
 ## Run / build / quit
 ```bash
 dotnet run        # launch the app
