@@ -28,7 +28,7 @@ def _data_dir() -> Path:
 
 def _msg_path() -> Path:
     """返回数据目录下的 messages-to-user.json 路径。"""
-    return _data_dir() / "messages-to-user.json"
+    return _data_dir().parent / "messages-to-user.json"
 
 def _todo_path() -> Path:
     """返回数据目录下的 todo.json 路径。"""
@@ -307,10 +307,12 @@ def todo_meta_stamp(args: dict, **kwargs) -> str:
 def speak_to_user(args: dict, **kwargs) -> str:
     try:
         text = args.get("text")
+        time = _now_cst_iso()
+
         if not isinstance(text, str):
             return _err("参数 text 必须是字符串")
 
-        _atomic_write_json(_msg_path(), {"text": text})
+        _atomic_write_json(_msg_path(), {"text": text, "time": time})
         
         return _ok({"success": True, "text": text})
     except Exception as exc:

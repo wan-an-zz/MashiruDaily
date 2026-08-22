@@ -1,4 +1,4 @@
-"""todo.json 与 todo-meta.json 的纯读取/初始化函数（无 HTTP 层，供 app/main.py 调用）。"""
+"""todo.json 、 todo-meta.json 与 messages-to-user.json 的纯读取/初始化函数（无 HTTP 层，供 app/main.py 调用）。"""
 
 import json
 import os
@@ -37,6 +37,10 @@ def _todo_json_path() -> Path:
 def _meta_json_path() -> Path:
     """返回数据目录下的 todo-meta.json 路径。"""
     return get_settings().data_dir / "todo-meta.json"
+
+def _msg_json_path() -> Path:
+    """返回数据目录下的 messages-to-user.json 路径。"""
+    return get_settings().data_dir.parent / "messages-to-user.json"
 
 
 def _now_cst_iso() -> str:
@@ -110,3 +114,26 @@ def current_meta() -> TodoMeta:
         "created_at": meta["created_at"],
         "count": len(load_todo_list()),
     }
+
+def current_messages() -> dict:
+    '''
+    返回当前Agent发出的消息。消息位于data_dir/messages-to-user.json
+    '''
+    path = _msg_json_path()
+    if path.exists():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                msg = data["text"]
+                time = data["time"]
+                return {"exist": True, "text": msg, "time": time}
+            else:
+                raise ValueError("messages-to-user.json 文件不合法")
+        except json.JSONDecodeError as exc:
+            raise ValueError("messages-to-user.json 文件不合法")
+        except KeyError as exc:
+            # 找不到指定键 -> 文件存在但是无内容
+            return {"exist": False, "text": "", "time": ""}
+        
+    else:
+        return {"exist": False, "text": "", "time": ""}

@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from json import loads
 
 from app.config import get_settings
-from app.todo_store import current_meta, load_todo_list
+from app.funcs import current_meta, load_todo_list, current_messages
 from hermes_plugin.mashiru_daily.tools import todo_upsert, todo_delete
 
 app = FastAPI()
@@ -43,7 +43,7 @@ class update_todo_msg(BaseModel):
 
 @app.exception_handler(ValueError)
 async def _value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
-    """todo.json / todo-meta.json 非法时由 store 抛 ValueError，统一映射为 HTTP 500。"""
+    """todo.json / todo-meta.json / messages-to-user.josn 非法时由 funcs 抛 ValueError，统一映射为 HTTP 500。"""
     return JSONResponse(status_code=500, content={"detail": str(exc)})
 
 
@@ -57,6 +57,10 @@ def get_meta() -> dict:
 def get_todo_list() -> list:
     """返回 todo.json 全量列表，snake_case 逐字透传（不含 has_synced）；缺失时返回空数组。"""
     return load_todo_list()
+
+@app.get("/api/messages")
+def get_messages() -> dict:
+    return current_messages()
 
 
 @app.get("/health")
