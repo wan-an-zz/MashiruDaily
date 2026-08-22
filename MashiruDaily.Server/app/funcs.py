@@ -39,7 +39,7 @@ def _meta_json_path() -> Path:
     return get_settings().data_dir / "todo-meta.json"
 
 def _msg_json_path() -> Path:
-    """返回数据目录下的 messages-to-user.json 路径。"""
+    """返回数据目录父目录下的 messages-to-user.json 路径。"""
     return get_settings().data_dir.parent / "messages-to-user.json"
 
 
@@ -123,17 +123,14 @@ def current_messages() -> dict:
     if path.exists():
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
+            if isinstance(data, dict) and {"text", "time"}.issubset(data):
                 msg = data["text"]
                 time = data["time"]
                 return {"exist": True, "text": msg, "time": time}
             else:
-                raise ValueError("messages-to-user.json 文件不合法")
+                raise ValueError("messages-to-user.json 文件不合法或已被损坏")
         except json.JSONDecodeError as exc:
-            raise ValueError("messages-to-user.json 文件不合法")
-        except KeyError as exc:
-            # 找不到指定键 -> 文件存在但是无内容
-            return {"exist": False, "text": "", "time": ""}
+            raise ValueError("messages-to-user.json 文件不合法或已被损坏")
         
     else:
         return {"exist": False, "text": "", "time": ""}

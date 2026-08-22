@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""对本地 Hermes Webhook 网关的冒烟测试脚本（仅标准库）。
+"""对本地 Hermes Webhook 网关（旧路径）的冒烟测试脚本（仅标准库）。
 
-按当前 MashiruDaily 客户端批量请求体（协议文档待同步）：
+当前客户端同步已改为 POST {ServerBaseUrl}/api/update，本脚本仅用于验证
+仍保留的 Hermes Webhook 网关（:8644）路由是否可用，不属于当前同步链路。
 - 向 POST {HermesBaseUrl}/webhooks/todo-sync 发送一个包含多个 todo 事件的 JSON 数组；
 - 请求头携带 X-Webhook-Timestamp（Unix 秒）、X-Webhook-Signature-V2
   （对 "{timestamp}.{rawBody}" 的 UTF-8 字节计算小写十六进制 HMAC-SHA256，
@@ -41,7 +42,7 @@ def build_batch() -> tuple[str, bytes]:
     """构造一个包含两个 todo 事件的批量请求体，返回 (batch_id, 原始请求字节)。
 
     - batch_id 为本次批量请求的 UUID，放入 X-Request-ID；
-    - 事件体为 JSON 数组，字段为 snake_case（event_type/payload.id/payload.is_completed 等）；
+    - 旧网关使用 JSON 数组事件体，字段为 snake_case；
     - payload 不含 has_synced（客户端本地字段，禁止传输）；
     - 使用紧凑 JSON（separators=(",", ":")），ensure_ascii=False 以保留中文。
     """

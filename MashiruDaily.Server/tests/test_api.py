@@ -196,7 +196,7 @@ def test_meta_sidecar_non_object_returns_json_500(client, data_dir) -> None:
 
 
 def test_created_at_survives_webhook_edit_but_stamp_changes_it(client, data_dir) -> None:
-    """webhook 式编辑后 created_at 不变（count 增加）；todo_meta_stamp 运行后 created_at 改变。"""
+    """客户端推送式编辑后 created_at 不变（count 增加）；todo_meta_stamp 运行后 created_at 改变。"""
     # Given: 初始 todo.json 与侧车
     _atomic_write(
         data_dir / "todo.json",
@@ -205,7 +205,7 @@ def test_created_at_survives_webhook_edit_but_stamp_changes_it(client, data_dir)
     meta_before = client.get("/api/todo/meta").json()
     created_before = meta_before["created_at"]
 
-    # When: 模拟 webhook 编辑（追加一条）后请求 meta
+    # When: 模拟客户端推送式编辑（追加一条）后请求 meta
     _atomic_write(
         data_dir / "todo.json",
         json.dumps([_item("1", "买牛奶"), _item("2", "写周报")], ensure_ascii=False),
@@ -254,7 +254,7 @@ def test_meta_count_is_live(client, data_dir) -> None:
 
 
 def _update_envelope(event_type: str, item: _TodoFixture) -> dict:
-    """构造一条与 C# 端 HermesSyncService.SendAsync 逐字段一致的推送事件。
+    """构造一条与 C# 端 RemoteSyncService.SendAsync 逐字段一致的推送事件。
 
     客户端序列化使用 snake_case：event_type / timestamp / payload 三层嵌套，
     payload 内恰为 id/title/is_completed/created_at/completed_at 五个字段。

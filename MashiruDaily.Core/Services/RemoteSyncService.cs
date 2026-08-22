@@ -18,10 +18,10 @@ using Microsoft.Extensions.Logging;
 namespace MashiruDaily.Core.Services;
 
 /// <summary>
-/// Hermes AI 同步后台任务。监听 <see cref="ITodoService"/> 的变更，
-/// 将变更作为已签名的 Webhook 事件推送到 Hermes，并实现通信协议中定义的
-/// 启动「先比对服务器创建时间，再决定推拉」流程。维护最近观测数据的值快照，
-/// 以便在不动 <c>TodoService</c> 自身锁的情况下做差异对比。
+/// 远程同步后台任务。监听 <see cref="ITodoService"/> 的变更，
+/// 将变更作为批量事件推送到服务器 /api/update，并执行启动时
+/// 「先比对服务器创建时间，再决定拉取或推送」的流程。
+/// 维护最近观测数据的值快照，用于在不动 <c>TodoService</c> 自身锁的情况下做差异对比。
 /// </summary>
 public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncService
 {
@@ -103,7 +103,7 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
     /// 以便自动对比并推送后续变更。
     /// </summary>
     /// <param name="todoService">待办数据的唯一来源，必须先初始化。</param>
-    /// <param name="settingsRepo">持久化的 Hermes 设置存储。</param>
+    /// <param name="settingsRepo">远程同步设置存储。</param>
     /// <param name="logger">结构化日志器。</param>
     /// <param name="httpClient">可选客户端（测试用）；缺省时创建默认实例。</param>
     public RemoteSyncService(
@@ -169,7 +169,7 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Hermes 手动同步失败。");
+            _logger.LogError(ex, "远程手动同步失败。");
             UpdateStatus(SyncStatus.Error, ex.Message);
         }
     }
@@ -185,7 +185,7 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
                 if (!_initialized || !_settings.SyncEnabled)
                     return;
 
-                _logger.LogInformation("正在冲刷待处理的 Hermes 事件。");
+                _logger.LogInformation("正在冲刷待处理的远程同步事件。");
                 EnqueuePendingAsUpdated();
                 await DispatchCoreAsync();
             }
@@ -196,7 +196,7 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Hermes 冲刷失败。");
+            _logger.LogError(ex, "远程同步冲刷失败。");
         }
     }
 
@@ -221,12 +221,12 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
 
             if (!_settings.SyncEnabled)
             {
-                _logger.LogInformation("Hermes 同步已禁用；跳过初始化网络调用。");
+                _logger.LogInformation("远程同步已禁用；跳过初始化网络调用。");
                 UpdateStatus(SyncStatus.Idle, null);
                 return;
             }
 
-            _logger.LogInformation("Hermes 同步已启用：先比对服务器创建时间，再决定推拉。");
+            _logger.LogInformation("远程同步已启用：先比对服务器创建时间，再决定推拉。");
             var meta = await FetchMetaAsync();
             if (meta is null)
                 return;
@@ -240,7 +240,7 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Hermes 同步初始化失败。");
+            _logger.LogError(ex, "远程同步初始化失败。");
             UpdateStatus(SyncStatus.Error, ex.Message);
         }
     }
@@ -562,7 +562,7 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
             {
                 _logger.LogWarning(
-                    ex, "共 {Count} 个待办的 Webhook 网络错误（第 {Attempt}/{Total} 次尝试）。Types: {Types}。Ids: {Ids}",
+                    ex, "共 {Count} 个待办的同步推送网络错误（第 {Attempt}/{Total} 次尝试）。Types: {Types}。Ids: {Ids}",
                     items.Count, attempt, totalAttempts,
                     string.Join(", ", types), string.Join(", ", ids));
             }
@@ -571,7 +571,7 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
         _logger.LogError(
             "共 {Count} 个todo已用尽全部 {TotalAttempts} 次尝试；条目保持待处理。Types: {Types}。Ids: {Ids}",
             items.Count, totalAttempts, string.Join(", ", types), string.Join(", ", ids));
-        UpdateStatus(SyncStatus.Error, $"共 {items.Count} 个待办的 Webhook 在 {totalAttempts} 次尝试后失败。");
+        UpdateStatus(SyncStatus.Error, $"共 {items.Count} 个待办的同步推送在 {totalAttempts} 次尝试后失败。");
         RefreshPendingSyncCount();
     }
 
