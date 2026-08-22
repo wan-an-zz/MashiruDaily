@@ -310,7 +310,8 @@ def speak_to_user(args: dict, **kwargs) -> str:
         if not isinstance(text, str):
             return _err("参数 text 必须是字符串")
 
-        _atomic_write_json(_msg_path(), {"text": text})
+        time = _now_cst_iso()
+        _atomic_write_json(_msg_path(), {"text": text, "time": time})
         
         return _ok({"success": True, "text": text})
     except Exception as exc:

@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from json import loads
 
 from app.config import get_settings
-from app.todo_store import current_meta, load_todo_list
+from app.funcs import current_meta, load_todo_list, current_messages
 from hermes_plugin.mashiru_daily.tools import todo_upsert, todo_delete
 
 app = FastAPI()
@@ -57,6 +57,10 @@ def get_meta() -> dict:
 def get_todo_list() -> list:
     """返回 todo.json 全量列表，snake_case 逐字透传（不含 has_synced）；缺失时返回空数组。"""
     return load_todo_list()
+
+@app.get("/api/messages")
+def get_messages() -> dict:
+    return current_messages()
 
 
 @app.get("/health")

@@ -5,6 +5,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TypedDict
+from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 
@@ -37,6 +38,10 @@ def _todo_json_path() -> Path:
 def _meta_json_path() -> Path:
     """返回数据目录下的 todo-meta.json 路径。"""
     return get_settings().data_dir / "todo-meta.json"
+
+def _msg_json_path() -> Path:
+    """返回数据目录下的 messages-to-user.json 路径。"""
+    return get_settings().data_dir.parent / "messages-to-user.json"
 
 
 def _now_cst_iso() -> str:
@@ -110,3 +115,21 @@ def current_meta() -> TodoMeta:
         "created_at": meta["created_at"],
         "count": len(load_todo_list()),
     }
+
+def current_messages() -> dict:
+    '''
+    返回当前Agent发出的消息。消息位于data_dir/messages-to-user.json
+    '''
+    path = _msg_json_path()
+    if path.exists():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                msg = data["text"]
+                time = data["time"]
+                return {"success": True, "text": msg, "time": time}
+        except json.JSONDecodeError as exc:
+            return JSONResponse(status_code=500, content={"success": False, "text": "", "time": ""})
+        
+    else:
+        return JSONResponse(status_code=500, content={"success": False, "text": "", "time": ""})
