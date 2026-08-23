@@ -1,9 +1,4 @@
-"""GET /api/todo 与 GET /api/todo/meta 的 API 集成测试。
-
-面向后续任务中的 app/main.py 编写（测试优先）：本文件在模块顶层只导入
-标准库与 pytest，app.main 在 fixture 内懒加载——当前阶段 app.main 尚不
-存在，用例会以 ERROR 呈现（预期的 RED 状态），待 main.py 落地后自动转绿。
-"""
+"""FastAPI 拉取、元数据与事件接收端点的离线契约测试。"""
 
 import json
 import os

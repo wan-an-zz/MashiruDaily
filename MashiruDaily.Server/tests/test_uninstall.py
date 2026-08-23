@@ -1,8 +1,4 @@
-"""uninstall.py 一键卸载程序的离线契约测试（测试优先，全部 mock，不执行真实进程）。
-
-面向 uninstall.py 编写（测试优先）：本文件在模块顶层导入 uninstall——当前阶段
-uninstall.py 尚不存在，用例会以 collection error 呈现（预期的 RED 状态），
-待 uninstall.py 落地后自动转绿。
+"""uninstall.py 一键卸载程序的离线契约测试（全部 mock，不执行真实进程）。
 
 所有用例通过 monkeypatch 覆盖模块级引用（subprocess.run / shutil.rmtree /
 os.name / os.environ / _config.* / configure_webhook._restart_gateway 等），

@@ -36,8 +36,8 @@ Avalonia 12.1 cross-platform app (net10.0) using SukiUI theming, MVVM + DI, NLog
 - 桌面：`dotnet build MashiruDaily.Desktop` / `dotnet run --project MashiruDaily.Desktop`
 - TUI：`dotnet build MashiruDaily.Tui` / `dotnet run --project MashiruDaily.Tui`（Esc 退出并冲刷）
 - Android：`dotnet build MashiruDaily.Android` (needs Android workload + SDK; runs on device/emulator via IDE)
-- 测试：`dotnet test MashiruDaily.Tests` — 完全离线（Hermes 同步测试用 FakeHttpMessageHandler 桩 HTTP，不会真发网络请求）。⚠️ 当前 **6 个 `HermesSyncServiceTests` 失败**：它们仍断言旧 webhook 网关契约（`/webhooks/todo-sync` + 数组根 + `event_id`/`client_id`），而 `488adbc` 重构后代码已改推 `POST /api/update` 对象根批量体 —— 修同步代码/测试时务必先读 Core AGENTS.md 的现状说明，别把红测试当基线照抄。
-- 服务端契约测试：`pytest MashiruDaily.Server/tests -v`（完全离线，**68 个用例**：test_api 9 / test_hermes_plugin 18 / test_bootstrap 28 / test_configure_webhook 11 / test_install_autostart 2）；手动启动：`.venv\Scripts\python.exe -m app.main`（详见 `MashiruDaily.Server/README.md`）。⚠️ 仓库无 CI（无 .github/workflows、无 Makefile/ps1/sh），`pytest` 无配置文件，纯默认发现。
+- 测试：`dotnet test MashiruDaily.Tests` — 完全离线（远程同步测试用 FakeHttpMessageHandler 桩 HTTP，不会真发网络请求）。同步测试已按当前 `POST {ServerBaseUrl}/api/update` 对象根批量体契约更新，见 `RemoteSyncServiceTests`。
+- 服务端契约测试：`pytest MashiruDaily.Server/tests -v`（完全离线）；手动启动：`.venv\Scripts\python.exe -m app.main`（详见 `MashiruDaily.Server/README.md`）。⚠️ 仓库无 CI（无 .github/workflows、无 Makefile/ps1/sh），`pytest` 无配置文件，纯默认发现。
 - 一个良性的 `Avalonia Accelerate Community requires telemetry...` 提示每次构建都出现 — 忽略它。
 - 若构建报 MSB3027/MSB3026（文件被 `.NET Host` 锁住），说明上个应用实例还在跑 — 杀掉重编：`Get-Process | ? ProcessName -match MashiruDaily | Stop-Process -Force`。
 
@@ -68,7 +68,7 @@ Avalonia 12.1 cross-platform app (net10.0) using SukiUI theming, MVVM + DI, NLog
 - **配置面缺失**：仓库**无** `.editorconfig` / `Directory.Build.props` / `Directory.Build.targets` / `nuget.config` / `global.json` —— 编译选项（Nullable/LangVersion/ImplicitUsings）全在各 csproj 里单独声明（仅 Tui 开了 `ImplicitUsings`，仅 Browser 有 `AllowUnsafeBlocks`）；Python 侧**无** pyproject.toml / pytest.ini / ruff 配置，pytest 纯默认发现。
 - **字段命名大小写陷阱**：`POST /api/update` 事件体 payload 与 `GET /api/todo` 是 snake_case（`is_completed`/`created_at`/`completed_at`、`id`/`title`）；本地 `todos.json` 是 PascalCase（`Id`/`Title`）；`HasSynced` 是客户端本地字段，**任何事件都不得传输**。
 - **`通信协议.md` 的部分章节已过时**：① 文档开头与第 5 章的「GET 端点为服务端契约、服务端尚未实现」已不成立 —— `MashiruDaily.Server` 已实现 `/api/todo/meta` 与 `/api/todo`；② **第 3 章「Webhook 推送（客户端 → Hermes :8644）」也已被 `488adbc` 重构废弃** —— 客户端现推 `POST {ServerBaseUrl}/api/update`（:8123）。契约精神（事件类型/签名/字段语义）仍权威，但端点以代码为准：`HermesSyncService.SendAsync` + `app/main.py`。
-- **Hermes 测试模式**：`HermesSyncServiceTests` 用 `FakeHttpMessageHandler`/`ThrowingHttpMessageHandler` 注入 `HttpClient` + `CreateHarnessAsync`（临时目录 + 真实 repo/service）+ `WaitUntilAsync` 轮询断言 —— 不 mock `TodoService`，新同步测试沿用该模式。⚠️ 见 Build/run：6 个用例仍是旧网关契约，别照抄其断言。
+- **远程同步测试模式**：`RemoteSyncServiceTests` 用 `FakeHttpMessageHandler`/`ThrowingHttpMessageHandler` 注入 `HttpClient` + `CreateHarnessAsync`（临时目录 + 真实 repo/service）+ `WaitUntilAsync` 轮询断言 —— 不 mock `TodoService`，新同步测试沿用该模式。
 - Android 已放行明文 HTTP（`AndroidManifest.xml`，commit 6fca148）以支持局域网访问；桌面/TUI 无此限制。
 - **TUI 键盘路由（Terminal.Gui v2 核心坑，改过 3 次才修对）**：
   - 按键经 `KeyDown` 事件沿焦点链冒泡到列处理，**不要用 `KeyBindings`**（它只在视图自身有焦点时生效；真实初始焦点常落在子控件上）。

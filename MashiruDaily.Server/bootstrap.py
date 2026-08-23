@@ -71,8 +71,7 @@ def _check_venv_python(venv_py: Path) -> bool:
     if venv_py.is_file():
         return True
     _remember_action_prompt(
-        f"[FAIL] 未找到虚拟环境解释器 {venv_py}。请先运行 setup_server.py 创建虚拟环境，或去掉 --skip-setup。",
-        file=sys.stderr,
+        f"[FAIL] 未找到虚拟环境解释器 {venv_py}。请先运行 setup_server.py 创建虚拟环境，或去掉 --skip-setup。"
     )
     return False
 
@@ -264,8 +263,7 @@ def _main(argv: list[str] | None = None) -> int:
         secret = args.secret or os.environ.get("MASHIRU_WEBHOOK_SECRET")
         if not secret:
             _remember_action_prompt(
-                "[FAIL] 缺少 webhook 密钥：请通过 --secret <密钥> 或环境变量 MASHIRU_WEBHOOK_SECRET 提供。",
-                file=sys.stderr,
+                "[FAIL] 缺少 webhook 密钥：请通过 --secret <密钥> 或环境变量 MASHIRU_WEBHOOK_SECRET 提供。"
             )
             return 1
         base_env = dict(os.environ)
@@ -279,10 +277,13 @@ def _main(argv: list[str] | None = None) -> int:
         if rc == 1:
             print(f"[FAIL] configure_webhook.py 失败（退出码 {rc}）。", file=sys.stderr)
             return rc
-        elif rc == 2:
+        if rc == 2:
             _remember_action_prompt("[提示] Hermes 拒绝在 root 下重启网关，webhook 配置已写入 config.yaml，\n将在 Hermes 下次重启时生效。本次未执行重启；可手动重启或等待下次重启。\n建议运行`sudo systemctl restart hermes-gateway.service完成重启`。")
         elif rc == 3:
             _remember_action_prompt("[提示] Hermes 拒绝在 root 下重启网关，webhook 配置已写入 config.yaml，\n将在 Hermes 下次重启时生效。本次未执行重启；可手动重启或等待下次重启。\n建议在Hermes所属用户下运行`hermes gateway restart`或`sudo systemctl restart hermes-gateway.service完成重启`")
+        elif rc != 0:
+            print(f"[FAIL] configure_webhook.py 失败（退出码 {rc}）。", file=sys.stderr)
+            return rc
         print("[OK] configure_webhook.py 完成。")
         
         if args.no_restart and not args.dry_run:

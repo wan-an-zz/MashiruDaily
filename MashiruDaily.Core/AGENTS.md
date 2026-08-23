@@ -37,7 +37,7 @@
 ## 测试
 
 - `dotnet test MashiruDaily.Tests` 完全离线。同步测试**不 mock `TodoService`**：`CreateHarnessAsync`（临时目录 + 真实 repo/service）+ `FakeHttpMessageHandler` 桩 HTTP + `WaitUntilAsync` 轮询断言。新同步测试沿用该模式。
-- ⚠️ **现状：6 个 `HermesSyncServiceTests` 是红的**（断言旧网关契约 `/webhooks/todo-sync` + 数组根 + `event_id`/`client_id`），与 `488adbc` 重构后的 `/api/update` 对象根批量体不符。**别把红测试当基线**；修测试或改同步逻辑前先读本文档的「推送端点已改」小节。
+- 当前 `RemoteSyncServiceTests` 已按 `/api/update` 对象根批量体契约断言（不再使用旧网关 `/webhooks/todo-sync` 数组根 + `event_id`/`client_id`）。
 
 ## ANTI-PATTERNS
 

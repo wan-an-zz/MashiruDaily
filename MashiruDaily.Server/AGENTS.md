@@ -12,8 +12,7 @@
 |---|---|
 | `app/` | `main.py`（FastAPI 入口+端点，含 `POST /api/update`）、`todo_store.py`（纯数据读写，无 HTTP）、`config.py`（环境变量驱动配置） |
 | `hermes_plugin/mashiru_daily/` | Hermes 插件：`tools.py`（todo_* 工具实现，原子写）、`schemas.py`（LLM Schema，钉了 has_synced/created_at 禁令）、`plugin.yaml`、`skills/`（4 个 skill：daily-planning/stage-goal-planning/todo-assigning/webhook-todo-sync，目录名=skill 名） |
-| `tools/test_webhook_signed.py` | 签名 webhook 冒烟（唯一联网测试，**不在 pytest 套件内**） |
-| `tests/` | 68 个离线契约测试（test_api 9 / test_hermes_plugin 18 / test_bootstrap 28 / test_configure_webhook 11 / test_install_autostart 2） |
+| `tests/` | 离线契约测试（test_api / test_hermes_plugin / test_bootstrap / test_configure_webhook / test_install_autostart / test_uninstall / test_data_dir_default） |
 | 根目录脚本 | `setup_server.py`、`register_hermes_plugin.py`、`configure_webhook.py`、`configure_cron.py`、`install_autostart.py`、`bootstrap.py`、`_config.py`（共享工具） |
 
 ## 命令

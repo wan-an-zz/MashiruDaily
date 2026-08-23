@@ -26,7 +26,7 @@ Hermes Agent（cron 每日运行）
    │  通过 speak_to_user 写入 messages-to-user.json
 ```
 
-**注意**：客户端同步不再经过 Hermes Webhook 网关（:8644）。`configure_webhook.py` 与 `tools/test_webhook_signed.py` 仍保留，但那是旧网关/可选部署路径，不是当前客户端同步链路。
+**注意**：客户端同步不再经过 Hermes Webhook 网关（:8644）。`configure_webhook.py` 仍保留，但那是旧网关/可选部署路径，不是当前客户端同步链路。
 
 ## 2. 数据文件
 
@@ -196,12 +196,6 @@ python bootstrap.py --secret <密钥>
 
 ```powershell
 pytest MashiruDaily.Server/tests -v
-```
-
-另有一个 Hermes Webhook 网关冒烟脚本（非当前客户端同步路径）：
-
-```powershell
-.venv\Scripts\python.exe tools\test_webhook_signed.py --secret <密钥>
 ```
 
 ## 9. 端口
