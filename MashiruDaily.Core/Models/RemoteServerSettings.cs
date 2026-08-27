@@ -41,7 +41,7 @@ public sealed class RemoteServerSettings
     public double TimeoutSeconds { get; set; } = 10;
 
     /// <summary>
-    /// 上次成功拉取时服务器 todo-meta.json 的 created_at（ISO 8601 UTC+8）。
+    /// 上次成功拉取时服务器todo-meta.json 的 created_at（ISO 8601 UTC+8）。
     /// 为空表示尚未同步，下次同步需要拉取。
     /// </summary>
     public string? LastSyncedAt { get; set; }
