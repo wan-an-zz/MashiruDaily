@@ -167,6 +167,23 @@ public class RemoteSyncServiceTests : IDisposable
 
     private async Task<(TodoService TodoService, RemoteServerSettingsService SettingsRepo, RemoteSyncService SyncService, HttpMessageHandler Handler)>
         CreateHarnessAsync(HttpMessageHandler handler, RemoteServerSettings? settings = null, params TodoItem[] seed)
+        => await CreateHarnessCoreAsync(handler, settings, null, false, seed);
+
+    private async Task<(TodoService TodoService, RemoteServerSettingsService SettingsRepo, RemoteSyncService SyncService, HttpMessageHandler Handler)>
+        CreateWebhookHarnessAsync(
+            HttpMessageHandler handler,
+            RemoteServerSettings? settings = null,
+            TimeSpan? agentReactionPollInterval = null,
+            params TodoItem[] seed)
+        => await CreateHarnessCoreAsync(handler, settings, agentReactionPollInterval, true, seed);
+
+    private async Task<(TodoService TodoService, RemoteServerSettingsService SettingsRepo, RemoteSyncService SyncService, HttpMessageHandler Handler)>
+        CreateHarnessCoreAsync(
+            HttpMessageHandler handler,
+            RemoteServerSettings? settings,
+            TimeSpan? agentReactionPollInterval,
+            bool webhookReactionEnabled,
+            params TodoItem[] seed)
     {
         var todoRepo = new TodoRepoService(NullLogger<TodoRepoService>.Instance, _dir);
         await todoRepo.SaveAsync(seed);
@@ -179,7 +196,12 @@ public class RemoteSyncServiceTests : IDisposable
 
         var httpClient = new HttpClient(handler);
         var syncService = new RemoteSyncService(
-            todoService, settingsRepo, NullLogger<RemoteSyncService>.Instance, httpClient);
+            todoService,
+            settingsRepo,
+            NullLogger<RemoteSyncService>.Instance,
+            httpClient,
+            agentReactionPollInterval,
+            webhookReactionEnabled);
 
         return (todoService, settingsRepo, syncService, handler);
     }
@@ -547,5 +569,181 @@ public class RemoteSyncServiceTests : IDisposable
 
         Assert.Empty(handler.Requests);
         Assert.Equal(SyncStatus.Idle, syncService.Status);
+    }
+    [Fact]
+    public async Task WebhookReaction_AfterSuccess_PushesToHermesAndPollsServerMessages()
+    {
+        var settings = SyncSettings();
+
+        var handler = new FakeHttpMessageHandler(request =>
+        {
+            if (request.Method == HttpMethod.Post &&
+                request.RequestUri!.AbsolutePath.EndsWith("/api/update"))
+                return OkPushResponse();
+
+            if (request.Method == HttpMethod.Post &&
+                request.RequestUri!.AbsolutePath.EndsWith("/webhooks/todo-sync"))
+                return new HttpResponseMessage(HttpStatusCode.OK);
+
+            if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"))
+                return JsonResponse(HttpStatusCode.OK,
+                    $"{{\"date\":\"2026-08-10\",\"created_at\":\"{ServerCreatedAt}\"}}");
+
+            if (request.RequestUri!.AbsolutePath.EndsWith("/api/messages"))
+                return JsonResponse(HttpStatusCode.OK,
+                    "{\"exist\":true,\"text\":\"Agent消息\",\"time\":\"2026-08-10T18:00:00+08:00\"}");
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+
+        var harness = await CreateWebhookHarnessAsync(
+            handler, settings, TimeSpan.FromMilliseconds(20),
+            new TodoItem { Title = "任务1", HasSynced = false });
+        var (_, _, syncService, _) = harness;
+
+        await syncService.InitializeAsync();
+
+        await WaitUntilAsync(() =>
+            handler.Requests.Any(r => r.Method == HttpMethod.Post &&
+                r.Uri!.AbsolutePath.EndsWith("/webhooks/todo-sync")),
+            "未收到 Hermes Webhook POST");
+
+        await WaitUntilAsync(() =>
+            handler.Requests.Any(r => r.Method == HttpMethod.Get &&
+                r.Uri!.AbsolutePath.EndsWith("/api/messages")),
+            "未轮询 /api/messages");
+
+        await WaitUntilAsync(() => syncService.Status == SyncStatus.Success,
+            "拉取到 Agent 消息后未进入 Success");
+
+        var serverPost = handler.Requests.Single(r =>
+            r.Method == HttpMethod.Post && r.Uri!.AbsolutePath.EndsWith("/api/update"));
+        AssertPushContract(serverPost, "todo_updated");
+
+        var webhookPost = handler.Requests.Single(r =>
+            r.Method == HttpMethod.Post && r.Uri!.AbsolutePath.EndsWith("/webhooks/todo-sync"));
+        Assert.EndsWith("/webhooks/todo-sync", webhookPost.Uri.AbsolutePath);
+        Assert.True(webhookPost.Headers.ContainsKey("X-Webhook-Timestamp"));
+        Assert.True(webhookPost.Headers.ContainsKey("X-Webhook-Signature-V2"));
+        Assert.True(webhookPost.Headers.ContainsKey("X-Request-ID"));
+
+        using var doc = JsonDocument.Parse(webhookPost.Body!);
+        Assert.Equal("update", doc.RootElement.GetProperty("event_type").GetString());
+        Assert.Equal(1, doc.RootElement.GetProperty("events").GetArrayLength());
+
+        Assert.DoesNotContain(handler.Requests, r =>
+            r.Method == HttpMethod.Get && r.Uri!.AbsolutePath.Contains("/webhooks/"));
+
+        syncService.Dispose();
+    }
+
+    [Fact]
+    public async Task WebhookReaction_PartialSuccess_SendsOnlySuccessfulTodoToHermes()
+    {
+        var okId = Guid.NewGuid();
+        var errId = Guid.NewGuid();
+
+        var handler = new FakeHttpMessageHandler(request =>
+        {
+            if (request.Method == HttpMethod.Post &&
+                request.RequestUri!.AbsolutePath.EndsWith("/api/update"))
+            {
+                return JsonResponse(HttpStatusCode.InternalServerError,
+                    $"{{\"success\":false,\"error_ids\":[\"{errId}\"],\"success_ids\":[\"{okId}\"]}}");
+            }
+
+            if (request.Method == HttpMethod.Post &&
+                request.RequestUri!.AbsolutePath.EndsWith("/webhooks/todo-sync"))
+                return new HttpResponseMessage(HttpStatusCode.OK);
+
+            if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"))
+                return JsonResponse(HttpStatusCode.OK,
+                    $"{{\"date\":\"2026-08-10\",\"created_at\":\"{ServerCreatedAt}\"}}");
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+
+        var harness = await CreateWebhookHarnessAsync(
+            handler, SyncSettings(), TimeSpan.FromMilliseconds(20),
+            new TodoItem { Id = okId, Title = "成功项", HasSynced = false },
+            new TodoItem { Id = errId, Title = "失败项", HasSynced = false });
+        var (todoService, _, syncService, _) = harness;
+
+        await syncService.InitializeAsync();
+
+        await WaitUntilAsync(() =>
+            handler.Requests.Any(r => r.Method == HttpMethod.Post &&
+                r.Uri!.AbsolutePath.EndsWith("/webhooks/todo-sync")),
+            "部分成功时未收到 Hermes Webhook POST");
+
+        var webhookPost = handler.Requests.First(r =>
+            r.Method == HttpMethod.Post && r.Uri!.AbsolutePath.EndsWith("/webhooks/todo-sync"));
+
+        using var doc = JsonDocument.Parse(webhookPost.Body!);
+        var events = doc.RootElement.GetProperty("events");
+        Assert.Equal(1, events.GetArrayLength());
+        Assert.Equal(okId, events[0].GetProperty("payload").GetProperty("id").GetGuid());
+        Assert.DoesNotContain(events.EnumerateArray(), e =>
+            e.GetProperty("payload").GetProperty("id").GetGuid() == errId);
+
+        Assert.True(todoService.Items.Single(x => x.Id == okId).HasSynced);
+        Assert.False(todoService.Items.Single(x => x.Id == errId).HasSynced);
+
+        syncService.Dispose();
+    }
+
+    [Fact]
+    public async Task WebhookReaction_Disabled_DoesNotSendHermesRequest()
+    {
+        var handler = CreateMetaHandler();
+        var harness = await CreateHarnessAsync(
+            handler, SyncSettings(),
+            new TodoItem { Title = "任务1", HasSynced = false });
+        var (_, _, syncService, _) = harness;
+
+        await syncService.InitializeAsync();
+
+        var post = Assert.Single(handler.Requests, r => r.Method == HttpMethod.Post);
+        Assert.EndsWith("/api/update", post.Uri.AbsolutePath);
+        Assert.DoesNotContain(handler.Requests, r =>
+            r.Uri!.AbsolutePath.EndsWith("/webhooks/todo-sync"));
+    }
+
+    [Fact]
+    public async Task WebhookReaction_WebhookFailure_DoesNotBlockSync()
+    {
+        var handler = new FakeHttpMessageHandler(request =>
+        {
+            if (request.Method == HttpMethod.Post &&
+                request.RequestUri!.AbsolutePath.EndsWith("/api/update"))
+                return OkPushResponse();
+
+            if (request.Method == HttpMethod.Post &&
+                request.RequestUri!.AbsolutePath.EndsWith("/webhooks/todo-sync"))
+                return new HttpResponseMessage(HttpStatusCode.InternalServerError);
+
+            if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"))
+                return JsonResponse(HttpStatusCode.OK,
+                    $"{{\"date\":\"2026-08-10\",\"created_at\":\"{ServerCreatedAt}\"}}");
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+
+        var harness = await CreateWebhookHarnessAsync(
+            handler, SyncSettings(), TimeSpan.FromMilliseconds(20),
+            new TodoItem { Title = "任务1", HasSynced = false });
+        var (_, _, syncService, _) = harness;
+
+        await syncService.InitializeAsync();
+
+        await WaitUntilAsync(() =>
+            handler.Requests.Any(r => r.Method == HttpMethod.Post &&
+                r.Uri!.AbsolutePath.EndsWith("/webhooks/todo-sync")),
+            "Webhook 失败时未发出 Hermes 请求");
+
+        Assert.Contains(handler.Requests, r =>
+            r.Method == HttpMethod.Post && r.Uri!.AbsolutePath.EndsWith("/webhooks/todo-sync"));
+
+        syncService.Dispose();
     }
 }
