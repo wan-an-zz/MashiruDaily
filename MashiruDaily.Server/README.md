@@ -12,7 +12,6 @@ MashiruDaily.Server 是一个轻量 Python 后端，承担三件事：
 
 当前同步数据流：
 
-```
 MashiruDaily 客户端
    │  GET  /api/todo/meta、/api/todo         拉取
    │  GET  /api/messages                     拉取 Agent 消息
@@ -24,9 +23,13 @@ FastAPI 服务器（:8123）
 Hermes Agent（cron 每日运行）
    │  通过 hermes_plugin 的 todo_* 工具维护 todo.json
    │  通过 speak_to_user 写入 messages-to-user.json
-```
 
-**注意**：客户端同步不再经过 Hermes Webhook 网关（:8644）。`configure_webhook.py` 仍保留，但那是旧网关/可选部署路径，不是当前客户端同步链路。
+MashiruDaily 客户端
+   │  POST {HermesBaseUrl}/webhooks/{WebhookRouteName}  推送成功后触发 Agent 反应（后台异步）
+   ▼
+Hermes Webhook 网关（:8644）
+
+**注意**：数据权威链路仍走 FastAPI `/api/update`。Hermes Webhook 网关（:8644）当前用于在客户端推送成功后触发 Hermes Agent 生成反应消息，客户端再通过 `/api/messages` 拉取该消息。
 
 ## 2. 数据文件
 
@@ -144,9 +147,9 @@ $HOME/.mashiru-daily/messages-to-user.json
 | 字段 | 默认值 | 当前用途 |
 |---|---|---|
 | `ServerBaseUrl` | 空 | 拉取与推送都走它，如 `http://<主机>:8123` |
-| `HermesBaseUrl` | `http://localhost:8644` | 仅设置页“连接测试”使用 |
-| `WebhookRouteName` | `todo-sync` | 旧字段，当前同步代码不再使用 |
-| `WebhookSecret` | 空 | 用于计算 `/api/update` 的 HMAC 签名（当前服务端未校验） |
+| `HermesBaseUrl` | `http://localhost:8644` | Hermes Webhook 基地址：触发 Agent 反应；设置页连接测试也用它 |
+| `WebhookRouteName` | `todo-sync` | Hermes Webhook 路由名，用于触发 Agent 反应 |
+| `WebhookSecret` | 空 | 用于计算 `/api/update` 与 Hermes Webhook 的 HMAC 签名 |
 | `SyncEnabled` | `false` | 同步总开关 |
 | `MaxRetryAttempts` | `3` | 推送失败最大重试次数 |
 | `TimeoutSeconds` | `10` | HTTP 超时秒数 |
@@ -178,7 +181,7 @@ $HOME/.mashiru-daily/messages-to-user.json
 |---|---|
 | `setup_server.py` | 创建 `.venv`、安装依赖、创建数据目录、生成初始 `todo-meta.json` |
 | `register_hermes_plugin.py` | 把 `hermes_plugin/mashiru_daily` 链接到 Hermes 并启用 |
-| `configure_webhook.py` | 配置 Hermes Webhook 网关的 `todo-sync` 路由（旧网关路径） |
+| `configure_webhook.py` | 配置 Hermes Webhook 网关的 `todo-sync` 路由（用于触发 Hermes Agent 反应） |
 | `configure_cron.py` | 创建每日 Hermes cron 任务，维护 `todo.json` |
 | `install_autostart.py` | 注册物理开机自启 |
 | `bootstrap.py` | 一键串联以上脚本 |
@@ -203,4 +206,4 @@ pytest MashiruDaily.Server/tests -v
 | 端口 | 用途 |
 |---|---|
 | `8123` | FastAPI 拉取/接收服务器，默认监听 `0.0.0.0` |
-| `8644` | Hermes Webhook 网关（旧路径，当前客户端同步不经过） |
+| `8644` | Hermes Webhook 网关（触发 Hermes Agent 反应） |

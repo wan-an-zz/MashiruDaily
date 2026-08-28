@@ -1,17 +1,17 @@
 # AGENTS.md — MashiruDaily.Server（Python 后端）
 
-> 本目录是独立的 Python FastAPI 项目，**不在 `MashiruDaily.slnx` 里**，有自己的 `.venv` 与 pytest 套件。运维细节以 `README.md`（运维手册）为准，本文件只钉代理必须遵守的纪律。改动契约相关代码前先读 `docs/design/通信协议.md`（**注意：其第 3 章 webhook 推送已过时**，推送端点以 `app/main.py` 的 `POST /api/update` 为准）。
+> 本目录是独立的 Python FastAPI 项目，**不在 `MashiruDaily.slnx` 里**，有自己的 `.venv` 与 pytest 套件。运维细节以 `README.md`（运维手册）为准，本文件只钉代理必须遵守的纪律。改动契约相关代码前先读 `docs/api&webhooks/通信协议.md`（当前链路：`POST /api/update` 改写数据，Hermes Webhook 只用于触发 Agent 反应）。
 
 ## 概览
 
-三职责：① **拉取服务器**（默认 `0.0.0.0:8123`：`GET /health`、`GET /api/todo/meta`、`GET /api/todo`，数据源 `$HOME/.mashiru-daily/todos/todo.json`）；② **事件接收**（`POST /api/update`，客户端 HMAC 签名批量推送，直接复用 `hermes_plugin` 的 `todo_upsert`/`todo_delete` 改写 `todo.json`，返回 `{success, error_ids, success_ids}`）；③ **Hermes 装配工具集**（`bootstrap.py` 一键串联 setup_server → register_hermes_plugin → configure_webhook → configure_cron → install_autostart）。开发采用 **TDD**：先写契约测试（RED）再实现转绿。
+三职责：① **拉取服务器**（默认 `0.0.0.0:8123`：`GET /health`、`GET /api/todo/meta`、`GET /api/todo`、`GET /api/messages`，数据源 `$HOME/.mashiru-daily/todos/todo.json`）；② **事件接收**（`POST /api/update`，客户端 HMAC 签名批量推送，直接复用 `hermes_plugin` 的 `todo_upsert`/`todo_delete` 改写 `todo.json`，返回 `{success, error_ids, success_ids}`）；③ **Hermes 装配工具集**（`bootstrap.py` 一键串联 setup_server → register_hermes_plugin → configure_webhook → configure_cron → install_autostart）。开发采用 **TDD**：先写契约测试（RED）再实现转绿。
 
 ## WHERE TO LOOK
 
 | 路径 | 内容 |
 |---|---|
-| `app/` | `main.py`（FastAPI 入口+端点，含 `POST /api/update`）、`todo_store.py`（纯数据读写，无 HTTP）、`config.py`（环境变量驱动配置） |
-| `hermes_plugin/mashiru_daily/` | Hermes 插件：`tools.py`（todo_* 工具实现，原子写）、`schemas.py`（LLM Schema，钉了 has_synced/created_at 禁令）、`plugin.yaml`、`skills/`（4 个 skill：daily-planning/stage-goal-planning/todo-assigning/webhook-todo-sync，目录名=skill 名） |
+| `app/` | `main.py`（FastAPI 入口+端点，含 `POST /api/update`、`GET /api/messages`）、`funcs.py`（纯数据读写，无 HTTP）、`config.py`（环境变量驱动配置） |
+| `hermes_plugin/mashiru_daily/` | Hermes 插件：`tools.py`（todo_* 工具实现，原子写）、`schemas.py`（LLM Schema，钉了 has_synced/created_at 禁令）、`plugin.yaml`、`skills/`（4 个 skill：daily-planning/stage-goal-planning/todo-assigning/todo-updating-and-observation，目录名=skill 名） |
 | `tests/` | 离线契约测试（test_api / test_hermes_plugin / test_bootstrap / test_configure_webhook / test_install_autostart / test_uninstall / test_data_dir_default） |
 | 根目录脚本 | `setup_server.py`、`register_hermes_plugin.py`、`configure_webhook.py`、`configure_cron.py`、`install_autostart.py`、`bootstrap.py`、`_config.py`（共享工具） |
 
@@ -29,7 +29,7 @@ pytest MashiruDaily.Server/tests -v     # 完全离线；无 pytest 配置，纯
 - **密钥纪律**：来自 `--secret` 或 `MASHIRU_WEBHOOK_SECRET`，禁硬编码/交互/进命令行/打印（打印前深拷贝 + 掩码 `***`）。`bootstrap.py` 经环境变量注入子进程。
 - **配置走环境变量**（`MASHIRU_DATA_DIR`/`MASHIRU_HOST`/`MASHIRU_PORT`/`HERMES_HOME`），默认数据目录为 `$HOME/.mashiru-daily/todos`（可用 `MASHIRU_DATA_DIR` 覆盖），路径**绝不用 `os.getcwd()`**（cron/systemd 启动时 cwd 不可信）。
 - **幂等可重跑**：全部装配脚本；改 `config.yaml` 前备份 `config.yaml.bak-<时间戳>`；`register_hermes_plugin.py` 遇已存在插件目录绝不覆盖；cron 任务名判断要求词边界。
-- **原子写**：`tools.py` 与 `todo_store.py` 一律先写 `.tmp` 再 `os.replace`。
+- **原子写**：`tools.py` 与 `funcs.py` 一律先写 `.tmp` 再 `os.replace`。
 - **数据形状**：`todo.json` 顶层必须是数组、侧车键完整，否则统一 `ValueError` → 500 JSON `detail`（不许 KeyError 裸崩）。
 - **错误以 JSON 字符串返回**：`hermes_plugin` 的 handler 绝不向上抛异常。
 - 时间戳统一为 ISO8601 UTC+8，带 `+08:00` 偏移（与 C# 端解析兼容）。
