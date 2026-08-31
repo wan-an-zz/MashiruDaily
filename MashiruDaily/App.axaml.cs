@@ -8,6 +8,7 @@ using Avalonia.Media;
 using MashiruDaily.Core.Abstracts;
 using MashiruDaily.Core.Logging;
 using MashiruDaily.Core.Services;
+using MashiruDaily.Core.ViewModels;
 using MashiruDaily.Core.ViewModels.Todo;
 using MashiruDaily.ViewModels;
 using MashiruDaily.Views;
@@ -139,6 +140,7 @@ public partial class App : Application
         services.AddSingleton<TodoPageViewModel>();
         services.AddSingleton<SettingsPageViewModel>();
         services.AddSingleton<MainViewModel>();
+        services.AddSingleton<TalkViewModel>();
 
         return services.BuildServiceProvider();
     }

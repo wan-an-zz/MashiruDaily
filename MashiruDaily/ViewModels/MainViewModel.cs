@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -39,7 +39,10 @@ public partial class MainViewModel : ViewModelBase
 
     public ObservableCollection<INavigationItem> NavigationItems { get; }
 
-    public MainViewModel(TodoPageViewModel todoPage, SettingsPageViewModel settingsPage, IRemoteSyncService syncService)
+    public MainViewModel(TodoPageViewModel todoPage,
+        SettingsPageViewModel settingsPage,
+        TalkViewModel talkPage,
+        IRemoteSyncService syncService)
     {
         _syncService = syncService;
         TodoPage = todoPage;
@@ -47,6 +50,7 @@ public partial class MainViewModel : ViewModelBase
         {
             new NavigationItem("Todo List", AppIcons.Todo, todoPage),
             new NavigationItem("设置", AppIcons.Settings, settingsPage),
+            new NavigationItem("聊天", AppIcons.Chat, talkPage),
         };
 
         syncService.StatusChanged += (_, _) => Dispatcher.UIThread.Post(() =>

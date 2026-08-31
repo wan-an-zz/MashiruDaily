@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using MashiruDaily.Core.Abstracts;
 using MashiruDaily.Core.Converters;
+using MashiruDaily.Core.Events;
 using MashiruDaily.Core.Models;
 using Microsoft.Extensions.Logging;
 
@@ -38,7 +39,7 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
 
         public const string Deleted = "todo_deleted";
     }
-    
+
     private sealed record WebhookSnapshot(
         string RawBody,
         string Timestamp,
@@ -117,6 +118,9 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
 
     /// <inheritdoc />
     public event EventHandler? StatusChanged;
+
+    // <inheritdoc />
+    public event EventHandler<GetMessageSuccessfulEventArgs>? GetMessageSuccessful;
 
     /// <summary>
     /// 创建同步服务。订阅 <see cref="ITodoService.Changed"/>，
@@ -779,8 +783,7 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
 
                     if (m.Exist == true)
                     {
-                        // TODO: 检查该方法内部报错应上抛
-                        SyncAgentMessage(m.Text);
+                        GetMessageSuccessful?.Invoke(this, new GetMessageSuccessfulEventArgs(m.Text));
                         success = true;
                     }
 
@@ -831,11 +834,6 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
         }
     }
 
-    private void SyncAgentMessage(string message)
-    {
-        // TODO: 将 Message 同步至 UI
-    }
-    
     /// <summary>
     /// 请求服务器元数据，并依据 <c>createdAt</c> 与本地 <see cref="RemoteServerSettings.LastSyncedAt"/>
     /// 决定是否需要拉取。调用方必须持有 <see cref="_gate"/>。

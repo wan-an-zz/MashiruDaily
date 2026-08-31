@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using MashiruDaily.Core.Events;
 
 namespace MashiruDaily.Core.Abstracts;
 
@@ -46,6 +47,11 @@ public interface IRemoteSyncService
     /// 状态、错误或待推送数量变化时触发。
     /// </summary>
     event EventHandler? StatusChanged;
+
+    /// <summary>
+    /// 当成功拉取到 Messages-to-user.json时触发
+    /// </summary>
+    event EventHandler<GetMessageSuccessfulEventArgs>? GetMessageSuccessful;
 
     /// <summary>
     /// 加载设置并执行启动同步。只应调用一次。

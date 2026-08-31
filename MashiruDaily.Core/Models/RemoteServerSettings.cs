@@ -11,17 +11,17 @@ public sealed class RemoteServerSettings
     public string ServerBaseUrl { get; set; } = string.Empty;
 
     /// <summary>
-    /// Hermes 地址；当前仅设置页“连接测试”使用。
+    /// Hermes 地址；用于推送更新快照触发 Agent 反应，也用于设置页“连接测试”。
     /// </summary>
     public string HermesBaseUrl { get; set; } = "http://localhost:8644";
 
     /// <summary>
-    /// Hermes Webhook 路由名，用于 Webhooks
+    /// Hermes Webhook 路由名，用于推送更新快照触发 Agent 反应。
     /// </summary>
     public string WebhookRouteName { get; set; } = "todo-sync";
 
     /// <summary>
-    /// 用于给 Hermes Webhooks 请求计算 HMAC-SHA256 签名的密钥。
+    /// 用于给 /api/update 与 Hermes Webhook 请求计算 HMAC-SHA256 签名的密钥。
     /// </summary>
     public string WebhookSecret { get; set; } = string.Empty;
 
