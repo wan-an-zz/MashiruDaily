@@ -98,6 +98,13 @@ def _print_webhook_block(webhook) -> None:
     yaml_obj.dump({"webhook": _redact_secret(webhook)}, buf)
     print(buf.getvalue())
 
+def _data_dir() -> Path:
+    """返回数据目录：优先环境变量 MASHIRU_DATA_DIR，否则 $HOME/.mashiru-daily/todos。"""
+    env = os.environ.get("MASHIRU_DATA_DIR")
+    if env:
+        return Path(env)
+    return Path.home() / ".mashiru-daily" / "plans"
+
 
 def main(argv: list[str] | None = None) -> int:
     """解析参数并按序执行：校验密钥 → 合并 webhook 配置 → 写回校验 → 重启网关。"""
@@ -131,13 +138,12 @@ def main(argv: list[str] | None = None) -> int:
 
     # 构造 todo-sync 路由
     prompt_text = (
-        "跟随webhook-todo-sync skill，修改todo.json：{__raw__}"
+        f"你帮助用户制定了高考提升的每日计划，现在用户对某些待办产生了修改(包括但不限于完成、修改内容或删除等等)。你帮助用户制定的计划在{_data_dir()}目录下。假设你需要阅读当前用户手中已被修改的计划，请调用TODO_LIST工具。现在你需要根据用户对待办产生的修改，调用SPEAK_TO_USER工具给出回应(可以是鼓励用户或询问用户之类的)。你禁止修改包括计划和待办在内的任何内容，你禁止直接访问todo.json和todo-meta.json，只允许使用工具进行访问。以下是被修改的待办的内容：{{__raw__}}"
     )
     desired_todo_sync = {
         "events": ["update"],
         "secret": secret,
         "prompt": _literal_scalar(prompt_text),
-        "skills": ["webhook-todo-sync"],
         "toolsets": ["mashiru_daily"],
     }
 
