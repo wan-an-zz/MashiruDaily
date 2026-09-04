@@ -337,6 +337,12 @@ def _main(argv: list[str] | None = None) -> int:
             return rc
         else:
             print("[OK] install_autostart.py 完成。")
+            if os.name == "nt" and not args.dry_run:
+                _remember_action_prompt(
+                    "[提示] Windows 开机自启任务已就绪（ONSTART）：将在下次开机时自动启动服务，"
+                    "当前不会立即运行。若需立即启动，请执行："
+                    f"schtasks /Run /TN {install_autostart.TASK_NAME}"
+                )
 
     # 步骤 6/6：启动验证
     print("\n[6/6] 启动验证：检查 /health 与 /api/todo/meta")
