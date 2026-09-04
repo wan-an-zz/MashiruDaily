@@ -27,7 +27,7 @@ description: 每日待办布置：读取每日任务计划（plan-daily.md），
 
 ## 前置条件
 
-1. **MashiruDaily 插件已安装**：工具集 `mashiru_daily`（含 `todo_list` / `todo_save` 等 8 个工具）可用。
+1. **MashiruDaily 插件已安装**：工具集 `mashiru_daily`（含 `todo_list` / `todo_save` / `speak_to_user` 等 9 个工具）可用。
 2. **plan-daily.md 已存在且通过用户审查**：本 Skill 只读取，不生成计划。
 3. **todo.json 可写**：插件数据目录（`MASHIRU_DATA_DIR`）权限正常。
 

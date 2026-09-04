@@ -117,7 +117,7 @@ def current_meta() -> TodoMeta:
 
 def current_messages() -> dict:
     '''
-    返回当前Agent发出的消息。消息位于data_dir/messages-to-user.json
+    返回当前Agent发出的消息。消息位于 data_dir 父目录的 messages-to-user.json
     '''
     path = _msg_json_path()
     if path.exists():

@@ -1,6 +1,6 @@
 """MashiruDaily FastAPI 服务器：提供拉取、消息读取与待办事件接收接口。
 
-契约见 docs/design/通信协议.md。网络 JSON 字段统一使用 snake_case，
+契约见 docs/api&webhooks/通信协议.md。网络 JSON 字段统一使用 snake_case，
 不传输客户端本地字段 has_synced。
 """
 

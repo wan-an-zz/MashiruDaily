@@ -33,16 +33,6 @@ WEBHOOK_PORT = 8644
 _ROOT_REFUSAL_SIGNAL = "Refusing to install the gateway system service as root"
 _USER_SYSTEMD_UNAVAILABLE_SIGNAL = "User systemd not reachable"
 
-# todo-sync 路由订阅的事件
-TODO_SYNC_EVENTS = [
-    "todo_added",
-    "todo_updated",
-    "todo_completed",
-    "todo_reopened",
-    "todo_deleted",
-]
-
-
 def _literal_scalar(text: str):
     """构造 ruamel 的字面量块标量，使多行 prompt 以 | 块形式写入 YAML（更易读）。"""
     from ruamel.yaml.scalarstring import LiteralScalarString
@@ -69,7 +59,7 @@ def _webhook_identical(webhook, desired: dict) -> bool:
         list(todo_sync.get("events") or []) == desired["events"]
         and str(todo_sync.get("secret") or "") == desired["secret"]
         and str(todo_sync.get("prompt") or "") == desired["prompt"]
-        and list(todo_sync.get("skills") or []) == desired["skills"]
+        and list(todo_sync.get("skills") or []) == desired.get("skills", [])
         and list(todo_sync.get("toolsets") or []) == desired["toolsets"]
     )
 
@@ -99,7 +89,7 @@ def _print_webhook_block(webhook) -> None:
     print(buf.getvalue())
 
 def _data_dir() -> Path:
-    """返回数据目录：优先环境变量 MASHIRU_DATA_DIR，否则 $HOME/.mashiru-daily/todos。"""
+    """返回计划目录：优先环境变量 MASHIRU_DATA_DIR，否则 $HOME/.mashiru-daily/plans。"""
     env = os.environ.get("MASHIRU_DATA_DIR")
     if env:
         return Path(env)
@@ -136,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
         print("请确认 Hermes Agent 已安装，或设置环境变量 HERMES_HOME 指向其主目录。", file=sys.stderr)
         return 1
 
-    # 构造 todo-sync 路由
+    # 构造 todo-sync 路由（不挂 skill，直接在 prompt 中约束 Agent 行为）
     prompt_text = (
         f"你帮助用户制定了高考提升的每日计划，现在用户对某些待办产生了修改(包括但不限于完成、修改内容或删除等等)。你帮助用户制定的计划在{_data_dir()}目录下。假设你需要阅读当前用户手中已被修改的计划，请调用TODO_LIST工具。现在你需要根据用户对待办产生的修改，调用SPEAK_TO_USER工具给出回应(可以是鼓励用户或询问用户之类的)。你禁止修改包括计划和待办在内的任何内容，你禁止直接访问todo.json和todo-meta.json，只允许使用工具进行访问。以下是被修改的待办的内容：{{__raw__}}"
     )
