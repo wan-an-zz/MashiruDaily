@@ -5,12 +5,7 @@
 - Linux/macOS：优先 systemd 系统服务（/etc/systemd/system，WantedBy=multi-user.target，
   物理开机自启 + 崩溃自动重启 + 网络就绪后启动）。需要 root/sudo；脚本在非 root 时自动加 sudo 前缀。
   无 systemd（或 macOS）时回退 crontab @reboot（cron 守护进程开机即执行，无需登录、免 sudo）。
-
-说明：物理开机启动属于系统级能力，必然要求管理员/sudo（OS 安全模型）；
-免提权的轻量替代是 crontab @reboot（无崩溃自动重启与依赖排序，但同样满足物理开机）。
-
-退出码：0=成功或无需操作；1=失败；2=Windows 非管理员，未执行、需用户手动完成
-（bootstrap/uninstall 据此提示用户手动操作，不中断流程）。
+退出码：0=成功或无需操作；1=失败；2=Windows 非管理员，未执行、需用户手动完成。
 
 用法：
     .venv\\Scripts\\python.exe install_autostart.py              # 注册物理开机自启
@@ -82,6 +77,38 @@ def _venv_python() -> Path:
 def _server_root() -> Path:
     """返回本脚本所在目录（即 MashiruDaily.Server 根目录）。"""
     return Path(__file__).resolve().parent
+
+
+def _real_user_home() -> Path:
+    """返回实际安装者（而非 SYSTEM/root 服务账户）的主目录。
+
+    Windows 的 schtasks 自启任务以 SYSTEM 运行，Linux 的 systemd 系统服务
+    通常以 root 运行，运行期 `Path.home()` 会解析到 systemprofile 或 /root；
+    而 Hermes 与 setup_server 在普通用户会话下读写 $HOME/.mashiru-daily。
+    若不把安装时用户的数据目录固化进自启命令，FastAPI 会读到另一份空/旧数据。
+    """
+    if os.name == "posix":
+        sudo_user = os.environ.get("SUDO_USER")
+        if sudo_user:
+            try:
+                import pwd
+
+                return Path(pwd.getpwnam(sudo_user).pw_dir)
+            except (ImportError, KeyError, OSError):
+                pass
+    return Path.home()
+
+
+def _data_dir() -> Path:
+    """数据目录：优先 MASHIRU_DATA_DIR，否则安装者 $HOME/.mashiru-daily/todos。
+
+    与 app/config.py 的 DEFAULT_DATA_DIR 语义一致；注册自启时必须把该路径固化，
+    避免服务进程以 SYSTEM/root 身份启动后数据目录漂移。
+    """
+    override = os.environ.get("MASHIRU_DATA_DIR")
+    if override:
+        return Path(override)
+    return _real_user_home() / ".mashiru-daily" / "todos"
 
 
 # ---------------------------------------------------------------------------
@@ -156,7 +183,10 @@ def _win_task_command() -> str:
         )
         raise SystemExit(1)
     log_path = root / "autostart.log"
-    return f"cmd /c cd /d {root} && {pythonw} -m app.main >> {log_path} 2>&1"
+    data_dir = _data_dir()
+    return (f"cmd /c cd /d {root} && "
+            f'set "MASHIRU_DATA_DIR={data_dir}" && '
+            f"{pythonw} -m app.main >> {log_path} 2>&1")
 
 
 def _install_windows(args) -> int:
@@ -219,6 +249,7 @@ def _service_unit_path() -> Path:
 def _service_unit_content() -> str:
     """生成 systemd 服务单元：multi-user.target 开机启动、崩溃自动重启、网络就绪后启动。"""
     python = _venv_python()
+    data_dir = _data_dir()
     return (
         "[Unit]\n"
         "Description=MashiruDaily Server (拉取服务器)\n"
@@ -228,6 +259,7 @@ def _service_unit_content() -> str:
         "[Service]\n"
         "Type=simple\n"
         f"WorkingDirectory={_server_root()}\n"
+        f'Environment="MASHIRU_DATA_DIR={data_dir}"\n'
         f"ExecStart={python} -m app.main\n"
         "Restart=on-failure\n"
         "RestartSec=5\n"
@@ -400,7 +432,7 @@ def _cron_line(enabled: bool) -> str:
     root = _server_root()
     python = _venv_python()
     marker = _CRON_MARKER if enabled else _CRON_DISABLED_MARKER
-    log_dir = Path.home() / ".mashiru-daily" / "todos"
+    log_dir = _data_dir()
     return f"@reboot cd {root} && {python} -m app.main >> {log_dir / 'autostart.log'} 2>&1 {marker}"
 
 
@@ -461,7 +493,7 @@ def _install_crontab(args) -> int:
         print("[DRY-RUN] 跳过写入 crontab。")
         return 0
     # 预创建日志目录，确保 @reboot 时 `>>` 重定向不因目录缺失而失败
-    (Path.home() / ".mashiru-daily" / "todos").mkdir(parents=True, exist_ok=True)
+    _data_dir().mkdir(parents=True, exist_ok=True)
     return _write_crontab(lines + [new_line])
 
 

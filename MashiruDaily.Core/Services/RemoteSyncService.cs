@@ -875,7 +875,7 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
             return null;
         }
 
-        var serverUtc = parsed.ToUniversalTime();
+        var serverUtc = parsed.ToLocalTime();
 
         bool needPull;
         if (string.IsNullOrWhiteSpace(_settings.LastSyncedAt))

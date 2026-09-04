@@ -40,6 +40,6 @@ pytest MashiruDaily.Server/tests -v     # 完全离线；无 pytest 配置，纯
 - 判定 Hermes 网关降级信号时只匹配单条输出流 — 两信号可能分落 `stderr`/`stdout`，**必须合并匹配**。
 - crontab 匹配先匹配短的启用标记 — 禁用标记是启用标记的子串，**先匹配更长的禁用标记**。
 - subprocess 解码不带 `errors="replace"` — 中文输出会炸崩溃。
-- `install_autostart.py` 的 `/RU SYSTEM` 任务 cwd 是 system32 — 必须显式 cd 才能 `python -m app`。
+- `install_autostart.py` 的 `/RU SYSTEM` 任务 cwd 是 system32 — 必须显式 cd 才能 `python -m app`；且 SYSTEM/root 的 `$HOME` 不是安装者 `$HOME` — 注册自启时**必须把安装者数据目录固化进 `MASHIRU_DATA_DIR`**，否则 FastAPI 与 Hermes 各读一份 todo.json。
 - 把联网测试塞进 pytest 套件 — 套件必须完全离线（用 in-process `TestClient` + monkeypatch 环境变量 + `_no_real_io` 兜底）。
 - `configure_webhook.py` 直接修改 config 活数据 — 改前必须深拷贝，且只合并 webhook 平台、**绝不触碰其它平台配置**。

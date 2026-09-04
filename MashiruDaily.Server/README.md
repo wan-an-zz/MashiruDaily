@@ -187,6 +187,12 @@ $HOME/.mashiru-daily/messages-to-user.json
 | `bootstrap.py` | 一键串联以上脚本 |
 | `uninstall.py` | 卸载部署足迹 |
 
+> **账户与数据目录**：开机自启以服务账户运行（Windows `SYSTEM`、Linux `root`），其 `$HOME`
+> 与安装者不同。`install_autostart.py` 注册时会按安装者把数据目录固化为
+> `MASHIRU_DATA_DIR`（`$HOME/.mashiru-daily/todos` 或显式环境变量），确保
+> FastAPI 与 Hermes 读写同一份 `todo.json`/`todo-meta.json`；若手工用其它方式
+> 启动服务器，请显式设置 `MASHIRU_DATA_DIR` 指向同一目录。
+
 推荐一键初始化：
 
 ```powershell
