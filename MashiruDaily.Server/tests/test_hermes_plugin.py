@@ -247,3 +247,22 @@ def test_todo_save_rejects_non_string_title(plugin_data_dir) -> None:
     assert result["success"] is False
     assert "title" in result["error"]
     assert not (plugin_data_dir / "todo.json").exists()
+
+
+def test_speak_to_user_writes_message_file(plugin_data_dir) -> None:
+    """speak_to_user 应把消息写到数据目录父目录的 messages-to-user.json。"""
+    result = _invoke(tools.speak_to_user, text="记得完成数学作业")
+    assert result["success"] is True
+
+    msg_path = plugin_data_dir.parent / "messages-to-user.json"
+    assert msg_path.exists()
+    data = json.loads(msg_path.read_text(encoding="utf-8"))
+    assert data["text"] == "记得完成数学作业"
+    assert data["time"].endswith("+08:00")
+
+
+def test_speak_to_user_rejects_non_string(plugin_data_dir) -> None:
+    """speak_to_user 的 text 必须是字符串；非法输入不写文件。"""
+    result = _invoke(tools.speak_to_user, text=123)
+    assert result["success"] is False
+    assert not (plugin_data_dir.parent / "messages-to-user.json").exists()

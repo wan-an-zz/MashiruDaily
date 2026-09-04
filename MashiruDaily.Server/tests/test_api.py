@@ -361,3 +361,41 @@ def test_update_rejects_malformed_body(client, data_dir) -> None:
 
     # Then: 422
     assert resp.status_code == 422
+
+
+def test_messages_missing_returns_exist_false(client, data_dir) -> None:
+    """messages-to-user.json 不存在时 GET /api/messages 应返回 exist=false。"""
+    resp = client.get("/api/messages")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"exist": False, "text": "", "time": ""}
+
+
+def test_messages_existing_returns_text_and_time(client, data_dir) -> None:
+    """messages-to-user.json 合法时 GET /api/messages 应返回消息内容。"""
+    _atomic_write(
+        data_dir.parent / "messages-to-user.json",
+        json.dumps(
+            {"text": "今天记得完成数学作业", "time": "2026-08-22T21:00:00+08:00"},
+            ensure_ascii=False,
+        ),
+    )
+
+    resp = client.get("/api/messages")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "exist": True,
+        "text": "今天记得完成数学作业",
+        "time": "2026-08-22T21:00:00+08:00",
+    }
+
+
+def test_messages_malformed_returns_json_500(client, data_dir) -> None:
+    """messages-to-user.json 结构不合法时 GET /api/messages 应返回 500 JSON detail。"""
+    _atomic_write(data_dir.parent / "messages-to-user.json", '{"text": "缺 time"}')
+
+    resp = client.get("/api/messages")
+
+    assert resp.status_code == 500
+    assert "detail" in resp.json()
