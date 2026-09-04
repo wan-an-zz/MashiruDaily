@@ -1,8 +1,4 @@
-"""uninstall.py 一键卸载程序的离线契约测试（测试优先，全部 mock，不执行真实进程）。
-
-面向 uninstall.py 编写（测试优先）：本文件在模块顶层导入 uninstall——当前阶段
-uninstall.py 尚不存在，用例会以 collection error 呈现（预期的 RED 状态），
-待 uninstall.py 落地后自动转绿。
+"""uninstall.py 一键卸载程序的离线契约测试（全部 mock，不执行真实进程）。
 
 所有用例通过 monkeypatch 覆盖模块级引用（subprocess.run / shutil.rmtree /
 os.name / os.environ / _config.* / configure_webhook._restart_gateway 等），
@@ -208,6 +204,17 @@ def test_autostart_failure_recorded(monkeypatch) -> None:
     """install_autostart 返回非零 → 步骤失败（返回 False）。"""
     _monkey_run(monkeypatch, returncode=5)
     assert not uninstall._remove_autostart(dry_run=False, skip=False)
+
+
+def test_autostart_manual_exit_2_is_not_failure(monkeypatch) -> None:
+    """install_autostart 返回 2（Windows 非管理员、需手动完成）→ 步骤不算失败，并记录手动提示。"""
+    uninstall._ACTION_PROMPTS.clear()
+    try:
+        _monkey_run(monkeypatch, returncode=2)
+        assert uninstall._remove_autostart(dry_run=False, skip=False)
+        assert any("开机自启" in p and "管理员" in p for p in uninstall._ACTION_PROMPTS)
+    finally:
+        uninstall._ACTION_PROMPTS.clear()
 
 
 # ---------------------------------------------------------------------------

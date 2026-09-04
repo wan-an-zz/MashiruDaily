@@ -1,8 +1,4 @@
-"""bootstrap.py 一键初始化程序的离线契约测试（测试优先，全部 mock，不执行真实进程）。
-
-面向 bootstrap.py 编写（测试优先）：本文件在模块顶层导入 bootstrap——当前阶段
-bootstrap.py 尚不存在，用例会以 collection error 呈现（预期的 RED 状态），
-待 bootstrap.py 落地后自动转绿。
+"""bootstrap.py 一键初始化程序的离线契约测试（全部 mock，不执行真实进程）。
 
 所有用例通过 monkeypatch 覆盖 bootstrap 模块级引用（subprocess.run / Popen /
 urllib.request.urlopen / os.name / time.sleep / os.environ 等），绝不触发真实
@@ -286,12 +282,56 @@ def test_fail_fast_stops_on_first_failure(monkeypatch) -> None:
 
 
 def test_exit_code_propagated(monkeypatch) -> None:
-    """webhook 步骤返回 3 时 main 应返回 3（透传子脚本退出码）。"""
+    """webhook 步骤返回未知非零退出码（非 1/2/3）时 main 应透传该退出码。"""
     monkeypatch.setattr("bootstrap.os.environ",
                         {"MASHIRU_WEBHOOK_SECRET": "env-secret"})
-    _monkey_run(monkeypatch, "configure_webhook.py", returncode=3)
+    _monkey_run(monkeypatch, "configure_webhook.py", returncode=4)
     rc = bootstrap.main(["--skip-autostart", "--no-verify"])
-    assert rc == 3
+    assert rc == 4
+
+
+def test_webhook_root_refusal_is_nonfatal_and_prompted(monkeypatch, capsys) -> None:
+    """webhook 步骤返回 2（root 拒绝重启）应视为成功，并在末尾重放提示。"""
+    monkeypatch.setattr("bootstrap.os.environ",
+                        {"MASHIRU_WEBHOOK_SECRET": "env-secret"})
+    monkeypatch.setattr(Path, "is_file", lambda self: True)
+    calls = _monkey_run(monkeypatch, "configure_webhook.py", returncode=2)
+    rc = bootstrap.main(["--skip-autostart", "--no-verify"])
+    assert rc == 0
+    assert any("configure_cron.py" in c for c, _ in calls)
+    out = capsys.readouterr().out
+    assert "以下操作需要您手动完成，请勿遗漏：" in out
+    assert "Hermes 拒绝在 root 下重启网关" in out
+
+
+def test_webhook_user_systemd_is_nonfatal_and_prompted(monkeypatch, capsys) -> None:
+    """webhook 步骤返回 3（用户级 systemd 不可达）应视为成功，并在末尾重放提示。"""
+    monkeypatch.setattr("bootstrap.os.environ",
+                        {"MASHIRU_WEBHOOK_SECRET": "env-secret"})
+    monkeypatch.setattr(Path, "is_file", lambda self: True)
+    calls = _monkey_run(monkeypatch, "configure_webhook.py", returncode=3)
+    rc = bootstrap.main(["--skip-autostart", "--no-verify"])
+    assert rc == 0
+    assert any("configure_cron.py" in c for c, _ in calls)
+    out = capsys.readouterr().out
+    assert "以下操作需要您手动完成，请勿遗漏：" in out
+    assert "Hermes所属用户" in out
+
+
+def test_autostart_manual_exit_is_nonfatal_and_prompted(monkeypatch, capsys) -> None:
+    """install_autostart 返回 2（Windows 非管理员、需手动完成）→ 不判失败、继续流程，末尾重放手动提示。"""
+    monkeypatch.setattr(Path, "is_file", lambda self: True)
+    calls = _monkey_run(monkeypatch, "install_autostart.py", returncode=2)
+    rc = bootstrap.main(["--skip-setup", "--skip-skills", "--skip-webhook",
+                         "--skip-cron", "--no-verify"])
+    assert rc == 0
+    assert any("install_autostart.py" in c for c, _ in calls)
+    out = capsys.readouterr().out
+    assert "以下操作需要您手动完成，请勿遗漏：" in out
+    assert "开机自启" in out
+    assert "管理员" in out
+    assert "install_autostart.py" in out
+    assert "[FAIL] install_autostart.py 失败" not in out
 
 
 # ---------------------------------------------------------------------------

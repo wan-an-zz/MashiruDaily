@@ -9,11 +9,8 @@ using Microsoft.Extensions.Logging;
 namespace MashiruDaily.Core.Services;
 
 /// <summary>
-/// 将 Hermes AI 同步设置以单个 JSON 对象持久化到
-/// <c>%APPDATA%\MashiruDaily\settings.json</c>。
-/// 写入是原子的（tmp 文件 + move），崩溃不会留下半写的文件。
-/// 缺失或损坏的文件按 <see cref="RemoteServerSettings.CreateDefault"/> 加载；
-/// IO 失败只记录日志，绝不抛出。
+/// 将远程同步设置持久化到 <c>%APPDATA%\MashiruDaily\settings.json</c>。
+/// 写入为原子操作（tmp + move）；缺失或损坏时按默认值加载；IO 失败只记日志。
 /// </summary>
 public sealed class RemoteServerSettingsService : IRemoteServerSettingsRepository
 {
@@ -45,7 +42,7 @@ public sealed class RemoteServerSettingsService : IRemoteServerSettingsRepositor
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "从 '{File}' 加载 Hermes 设置失败；改用默认值。", _filePath);
+            _logger.LogError(ex, "从 '{File}' 加载远程同步设置失败；改用默认值。", _filePath);
             return Task.FromResult(RemoteServerSettings.CreateDefault());
         }
     }
@@ -62,7 +59,7 @@ public sealed class RemoteServerSettingsService : IRemoteServerSettingsRepositor
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "保存 Hermes 设置到 '{File}' 失败。", _filePath);
+            _logger.LogError(ex, "保存远程同步设置到 '{File}' 失败。", _filePath);
         }
     }
 }

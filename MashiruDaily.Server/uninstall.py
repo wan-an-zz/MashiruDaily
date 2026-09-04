@@ -42,6 +42,7 @@ from pathlib import Path
 
 import _config  # 本目录共享的 Hermes 配置工具
 import configure_webhook  # 复用其 _restart_gateway（含 root 拒绝降级逻辑）
+import install_autostart  # 复用其 EXIT_MANUAL_REQUIRED（Windows 非管理员时需手动完成）
 
 # 服务器根目录（即本脚本所在目录）
 SERVER_ROOT = Path(__file__).resolve().parent
@@ -220,6 +221,17 @@ def _remove_autostart(dry_run: bool, skip: bool) -> bool:
         print(result.stdout.strip())
     if result.stderr.strip():
         print(result.stderr.strip(), file=sys.stderr)
+    if result.returncode == install_autostart.EXIT_MANUAL_REQUIRED:
+        # Windows 非管理员：install_autostart 未执行、已打印手动指引（退出码 2）；
+        # 视为「待手动完成」而非失败，记录提示供末尾统一重放。
+        rerun_cmd = subprocess.list2cmdline(
+            [sys.executable, str(SERVER_ROOT / "install_autostart.py"), "--uninstall"]
+        )
+        _remember_action_prompt(
+            "[提示] Windows 开机自启未删除：需要管理员权限。"
+            f"请以管理员身份打开终端后执行：{rerun_cmd}"
+        )
+        return True
     if result.returncode != 0:
         print(f"[FAIL] 移除开机自启失败（退出码 {result.returncode}）。", file=sys.stderr)
         return False

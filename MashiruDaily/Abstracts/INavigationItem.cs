@@ -9,7 +9,7 @@ namespace MashiruDaily.Abstracts;
 /// </summary>
 public interface INavigationItem
 {
-    /// <summary>菜单 / 标签文字，例如 "Todo"。</summary>
+    /// <summary>菜单 / 标签文字，例如Todo"。</summary>
     string Header { get; }
 
     /// <summary>显示在标签旁的图标几何。</summary>

@@ -1,7 +1,7 @@
 """创建 Hermes 每日定时任务 mashiru-daily（幂等）。
 
 - 先执行 `hermes cron list` 检查：任务已存在则打印“已存在，跳过”并以 0 退出；
-- 否则执行 `hermes cron create "<schedule>" "<prompt>" --name mashiru-daily --workdir <Server目录> --skill mashiru-todo`；
+- 否则执行 `hermes cron create "<schedule>" "<prompt>" --name mashiru-daily --workdir <Server目录> --skill todo-assigning`；
 - 创建成功后再次打印 `hermes cron list` 确认。
 
 用法：

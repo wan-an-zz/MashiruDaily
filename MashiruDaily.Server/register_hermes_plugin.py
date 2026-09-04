@@ -225,7 +225,7 @@ def main() -> int:
         if not _enable_plugin_in_config(yaml_obj, config_path, PLUGIN_NAME):
             return 1
 
-    # 3. 同步外部 skill 目录（保留普通技能名 mashiru-todo）
+    # 3. 同步外部 skill 目录
     return _sync_external_dirs(yaml_obj, config_path, server_root)
 
 

@@ -2,13 +2,15 @@
 
 平台分派：
 - Windows：schtasks /SC ONSTART + /RU SYSTEM（系统启动即触发、无需登录，SYSTEM 账户免密码）。
-  需要管理员权限；脚本在非管理员 + 非 --dry-run 时自动以 UAC 提权重启自身。
 - Linux/macOS：优先 systemd 系统服务（/etc/systemd/system，WantedBy=multi-user.target，
   物理开机自启 + 崩溃自动重启 + 网络就绪后启动）。需要 root/sudo；脚本在非 root 时自动加 sudo 前缀。
   无 systemd（或 macOS）时回退 crontab @reboot（cron 守护进程开机即执行，无需登录、免 sudo）。
 
 说明：物理开机启动属于系统级能力，必然要求管理员/sudo（OS 安全模型）；
 免提权的轻量替代是 crontab @reboot（无崩溃自动重启与依赖排序，但同样满足物理开机）。
+
+退出码：0=成功或无需操作；1=失败；2=Windows 非管理员，未执行、需用户手动完成
+（bootstrap/uninstall 据此提示用户手动操作，不中断流程）。
 
 用法：
     .venv\\Scripts\\python.exe install_autostart.py              # 注册物理开机自启
@@ -27,6 +29,9 @@ from pathlib import Path
 
 TASK_NAME = "MashiruDailyServer"
 SERVICE_NAME = "mashirudaily-server.service"
+
+# Windows 非管理员运行时的退出码：表示未执行、需要用户手动完成（调用方据此提示，不判失败）
+EXIT_MANUAL_REQUIRED = 2
 
 # crontab 行的唯一标记（用于幂等判断与 disable/enable）
 _CRON_MARKER = "# mashirudaily-server"
@@ -85,7 +90,7 @@ def _server_root() -> Path:
 
 
 def _is_admin_win() -> bool:
-    """判断当前进程是否为管理员（用于决定是否提权重启）。"""
+    """判断当前进程是否已具备管理员权限（非管理员时打印手动指引，不自动提权）。"""
     try:
         import ctypes
 
@@ -94,13 +99,29 @@ def _is_admin_win() -> bool:
         return False
 
 
-def _relaunch_elevated() -> None:
-    """以管理员身份（UAC 弹窗）重新启动自身，原参数原样传递。"""
-    import ctypes
+def _print_manual_instructions(args) -> None:
+    """Windows 非管理员时打印手动操作指引（不尝试自动 UAC 提权）。
 
-    params = subprocess.list2cmdline(sys.argv)
-    ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, params, None, 1)
-    print("[INFO] 已请求管理员权限，请在弹出的 UAC 提示中确认。")
+    自动提权（ShellExecuteW runas）在受限/非交互会话下会静默失败且没有返回值检查，
+    用户感知为「没有弹窗、什么都没发生」；因此改为打印可复制的管理员操作指引，
+    并返回 EXIT_MANUAL_REQUIRED，由用户或调用方（bootstrap/uninstall）手动完成。
+    """
+    if args.uninstall:
+        verb = "删除开机自启"
+    elif args.disable:
+        verb = "禁用开机自启"
+    elif args.enable:
+        verb = "启用开机自启"
+    else:
+        verb = "注册开机自启"
+    script = Path(sys.argv[0]).resolve()
+    rerun_cmd = subprocess.list2cmdline([sys.executable, str(script)] + sys.argv[1:])
+    print(f"[INFO] {verb}需要管理员权限（schtasks 属系统级计划任务，任务以 SYSTEM 账户运行）。")
+    print("[INFO] 本程序不自动弹出 UAC 授权（受限/非交互会话下可能静默失败），请手动完成：")
+    print("  1) 按 Win+X 选择「终端(管理员)」，或搜索 PowerShell 后右键「以管理员身份运行」；")
+    print("     出现 UAC 弹窗时选择「是」；")
+    print("  2) 在管理员终端中执行以下命令：")
+    print(f"     {rerun_cmd}")
 
 
 def _schtasks_exists() -> bool:
@@ -460,12 +481,12 @@ def main() -> int:
     args = parser.parse_args()
 
     if os.name == "nt":
-        # Windows：schtasks ONSTART + /RU SYSTEM 需要管理员；
-        # 非管理员（且非演练）自动 UAC 提权重启自身。
+        # Windows：schtasks ONSTART + /RU SYSTEM 需要管理员权限。
+        # 不自动提权重启（runas 在受限/非交互会话下会静默失败且无感知），
+        # 非管理员（且非演练）时打印手动操作指引并以退出码 2 退出。
         if not args.dry_run and not _is_admin_win():
-            print("[INFO] 物理开机自启需要管理员权限（schtasks ONSTART /RU SYSTEM）。")
-            _relaunch_elevated()
-            return 0
+            _print_manual_instructions(args)
+            return EXIT_MANUAL_REQUIRED
         return _install_windows(args)
 
     # POSIX（Linux/macOS）：优先 systemd 系统服务（物理开机自启，需 root/sudo），

@@ -8,22 +8,24 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using MashiruDaily.Core.Abstracts;
 using MashiruDaily.Core.Converters;
+using MashiruDaily.Core.Events;
 using MashiruDaily.Core.Models;
 using Microsoft.Extensions.Logging;
 
 namespace MashiruDaily.Core.Services;
 
 /// <summary>
-/// Hermes AI 同步后台任务。监听 <see cref="ITodoService"/> 的变更，
-/// 将变更作为已签名的 Webhook 事件推送到 Hermes，并实现通信协议中定义的
-/// 启动「先比对服务器创建时间，再决定推拉」流程。维护最近观测数据的值快照，
-/// 以便在不动 <c>TodoService</c> 自身锁的情况下做差异对比。
+/// 远程同步后台任务。监听 <see cref="ITodoService"/> 的变更，
+/// 将变更作为批量事件推送到服务器 /api/update，并执行启动时
+/// 「先比对服务器创建时间，再决定拉取或推送」的流程。
+/// 维护最近观测数据的值快照，用于在不动 <c>TodoService</c> 自身锁的情况下做差异对比。
 /// </summary>
-public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncService
+public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncService, IDisposable
 {
     private static class EventTypes
     {
@@ -38,10 +40,18 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
         public const string Deleted = "todo_deleted";
     }
 
+    private sealed record WebhookSnapshot(
+        string RawBody,
+        string Timestamp,
+        string Signature,
+        string WebhookUrl,
+        string MessagesUrl,
+        string RequestId);
+
     private sealed record PendingEvent(TodoItem Snapshot, string Type);
 
     /// <summary>
-    /// 拉取决策：是否需要拉取，以及服务器 todo.json 的创建时间（统一 UTC+8）。
+    /// 拉取决策：是否需要拉取，以及服务器todo.json 的创建时间（统一 UTC+8）。
     /// </summary>
     private sealed record MetaResult(bool NeedPull, DateTimeOffset ServerCreatedAt);
 
@@ -85,6 +95,17 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
     private RemoteServerSettings _settings = RemoteServerSettings.CreateDefault();
 
     private Timer? _timer;
+    private readonly TimeSpan _agentReactionPollInterval;
+
+    private readonly bool _webhookReactionEnabled;
+
+    private readonly Channel<WebhookSnapshot> _channel = Channel.CreateUnbounded<WebhookSnapshot>();
+
+    private readonly CancellationTokenSource _webhookCts = new();
+
+    private readonly object _webhookWorkerLock = new();
+
+    private Task? _webhookWorker;
 
     [ObservableProperty]
     private SyncStatus _status;
@@ -98,24 +119,31 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
     /// <inheritdoc />
     public event EventHandler? StatusChanged;
 
+    // <inheritdoc />
+    public event EventHandler<GetMessageSuccessfulEventArgs>? GetMessageSuccessful;
+
     /// <summary>
     /// 创建同步服务。订阅 <see cref="ITodoService.Changed"/>，
     /// 以便自动对比并推送后续变更。
     /// </summary>
     /// <param name="todoService">待办数据的唯一来源，必须先初始化。</param>
-    /// <param name="settingsRepo">持久化的 Hermes 设置存储。</param>
+    /// <param name="settingsRepo">远程同步设置存储。</param>
     /// <param name="logger">结构化日志器。</param>
     /// <param name="httpClient">可选客户端（测试用）；缺省时创建默认实例。</param>
     public RemoteSyncService(
         ITodoService todoService,
         IRemoteServerSettingsRepository settingsRepo,
         ILogger<RemoteSyncService> logger,
-        HttpClient? httpClient = null)
+        HttpClient? httpClient = null,
+        TimeSpan? agentReactionPollInterval = null,
+        bool webhookReactionEnabled = true)
     {
         _todoService = todoService;
         _settingsRepo = settingsRepo;
         _logger = logger;
         _httpClient = httpClient ?? new HttpClient();
+        _agentReactionPollInterval = agentReactionPollInterval ?? TimeSpan.FromSeconds(30);
+        _webhookReactionEnabled = webhookReactionEnabled;
         _todoService.Changed += OnServiceChanged;
     }
 
@@ -169,7 +197,7 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Hermes 手动同步失败。");
+            _logger.LogError(ex, "远程手动同步失败。");
             UpdateStatus(SyncStatus.Error, ex.Message);
         }
     }
@@ -185,7 +213,7 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
                 if (!_initialized || !_settings.SyncEnabled)
                     return;
 
-                _logger.LogInformation("正在冲刷待处理的 Hermes 事件。");
+                _logger.LogInformation("正在冲刷待处理的远程同步事件。");
                 EnqueuePendingAsUpdated();
                 await DispatchCoreAsync();
             }
@@ -196,7 +224,7 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Hermes 冲刷失败。");
+            _logger.LogError(ex, "远程同步冲刷失败。");
         }
     }
 
@@ -221,12 +249,12 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
 
             if (!_settings.SyncEnabled)
             {
-                _logger.LogInformation("Hermes 同步已禁用；跳过初始化网络调用。");
+                _logger.LogInformation("远程同步已禁用；跳过初始化网络调用。");
                 UpdateStatus(SyncStatus.Idle, null);
                 return;
             }
 
-            _logger.LogInformation("Hermes 同步已启用：先比对服务器创建时间，再决定推拉。");
+            _logger.LogInformation("远程同步已启用：先比对服务器创建时间，再决定推拉。");
             var meta = await FetchMetaAsync();
             if (meta is null)
                 return;
@@ -240,7 +268,7 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Hermes 同步初始化失败。");
+            _logger.LogError(ex, "远程同步初始化失败。");
             UpdateStatus(SyncStatus.Error, ex.Message);
         }
     }
@@ -433,9 +461,10 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
     /// </summary>
     private async Task SendAsync(List<PendingEvent> items)
     {
+        // TODO: todo同步和webhook状态同步状态分离
         UpdateStatus(SyncStatus.Syncing, null);
 
-        // POST
+        // 构建请求体 (更新待办和 Webhooks共用 )
         var envelopes = new List<dynamic>();
         var types = new List<string>();
         var ids = new List<Guid>();
@@ -470,6 +499,8 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
         var signature = HermesWebhookSigner.ComputeSignature(_settings.WebhookSecret, timestamp, rawBody);
         var url = $"{_settings.ServerBaseUrl.TrimEnd('/')}/api/update";
+        var webhookUrl = $"{_settings.HermesBaseUrl.TrimEnd('/')}/webhooks/{_settings.WebhookRouteName}";
+        var messagesUrl = $"{_settings.ServerBaseUrl.TrimEnd('/')}/api/messages";
 
         var totalAttempts = Math.Max(0, _settings.MaxRetryAttempts) + 1;
 
@@ -491,9 +522,14 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
                         "共 {Count} 个todo已被接收（HTTP {StatusCode}）。Types: {Types}。Ids:{Ids}",
                         items.Count,  (int)response.StatusCode, string.Join("\n;", types),  string.Join("\n;", ids));
                     await _todoService.MarkSyncedAsync(ids);
-
                     RefreshPendingSyncCount();
-                    UpdateStatus(SyncStatus.Success, null);
+                    await EnqueueWebhookSnapshot(new WebhookSnapshot(
+                        rawBody,
+                        timestamp,
+                        signature,
+                        webhookUrl,
+                        messagesUrl,
+                        eventId.ToString()));
                     return;
                 }
 
@@ -509,27 +545,28 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
 
                 if (response.StatusCode == HttpStatusCode.InternalServerError)
                 {
-                    var content = await response.Content.ReadAsStringAsync();
-                    var template = new
-                    {
-                        success = false,
-                        ErrorIds = new List<string>(),
-                        SuccessIds = new List<string>()
-                    };
-
                     try
                     {
-                        dynamic? r = JsonSerializer.Deserialize(content, template.GetType(), SnakeCaseOption);
-                        if (r is null)
+                        // 将成功部分标记 HasSynced 为 true，并推送 Hermes
+                        var template = new
+                        {
+                            success = false,
+                            ErrorIds = new List<string>(),
+                            SuccessIds = new List<string>()
+                        };
+                        dynamic? content =
+                            await response.Content.ReadFromJsonAsync(template.GetType(), SnakeCaseOption);
+                        if (content is null)
                         {
                             UpdateStatus(SyncStatus.Error, $"远端返回错误");
                             _logger.LogError("Response反序列化失败，远端返回错误");
                         }
                         else
                         {
-                            var errorIds = r.ErrorIds as List<string> ?? new List<string>();
-                            var successIds = r.SuccessIds as List<string> ?? new List<string>();
+                            var errorIds = content.ErrorIds as List<string> ?? new List<string>();
+                            var successIds = content.SuccessIds as List<string> ?? new List<string>();
                             var successes = new List<Guid>();
+                            var successTodos = new List<dynamic>();
 
                             _logger.LogError("共有 {Count} 个 Todo 推送错误。Ids: {Ids}", errorIds.Count, string.Join(",\n ", errorIds));
 
@@ -538,12 +575,36 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
                                 if (Guid.TryParse(successId, out var id))
                                 {
                                     successes.Add(id);
+
+                                    var item = envelopes.FirstOrDefault(x => (Guid)x.payload.id == id);
+                                    if (item is not null)
+                                    {
+                                        successTodos.Add(item);
+                                    }
                                 }
                             }
 
                             await _todoService.MarkSyncedAsync(successes);
                             RefreshPendingSyncCount();
                             UpdateStatus(SyncStatus.Error, $"有{errorIds.Count}个todo推送错误");
+
+                            // 将成功推送的todo重组为新的请求体，投递到后台 Webhook 队列
+                            var webhookBody = new
+                            {
+                                eventType = "update",
+                                events = successTodos,
+                            };
+                            var rawWebhookBody = JsonSerializer.Serialize(webhookBody, SnakeCaseOption);
+                            var timestamp2 = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+                            var signature2 = HermesWebhookSigner.ComputeSignature(_settings.WebhookSecret, timestamp2, rawWebhookBody);
+
+                            await EnqueueWebhookSnapshot(new WebhookSnapshot(
+                                rawWebhookBody,
+                                timestamp2,
+                                signature2,
+                                webhookUrl,
+                                messagesUrl,
+                                eventId.ToString()));
                         }
                     }
                     catch (JsonException)
@@ -562,7 +623,7 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
             {
                 _logger.LogWarning(
-                    ex, "共 {Count} 个待办的 Webhook 网络错误（第 {Attempt}/{Total} 次尝试）。Types: {Types}。Ids: {Ids}",
+                    ex, "共 {Count} 个待办的同步推送网络错误（第 {Attempt}/{Total} 次尝试）。Types: {Types}。Ids: {Ids}",
                     items.Count, attempt, totalAttempts,
                     string.Join(", ", types), string.Join(", ", ids));
             }
@@ -571,8 +632,206 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
         _logger.LogError(
             "共 {Count} 个todo已用尽全部 {TotalAttempts} 次尝试；条目保持待处理。Types: {Types}。Ids: {Ids}",
             items.Count, totalAttempts, string.Join(", ", types), string.Join(", ", ids));
-        UpdateStatus(SyncStatus.Error, $"共 {items.Count} 个待办的 Webhook 在 {totalAttempts} 次尝试后失败。");
+        UpdateStatus(SyncStatus.Error, $"共 {items.Count} 个待办的同步推送在 {totalAttempts} 次尝试后失败。");
         RefreshPendingSyncCount();
+    }
+
+    private async Task EnqueueWebhookSnapshot(WebhookSnapshot snapshot)
+    {
+        if (!_webhookReactionEnabled)
+            return;
+
+        await _channel.Writer.WriteAsync(snapshot);
+        lock (_webhookWorkerLock)
+        {
+            if (_webhookWorker is { IsCompleted: false })
+                return;
+
+            _webhookWorker = Task.Run(() => ConsumeWebhookJobsAsync(_webhookCts.Token));
+        }
+    }
+
+    private async Task ConsumeWebhookJobsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await foreach (var snapshot in _channel.Reader.ReadAllAsync(cancellationToken))
+            {
+                try
+                {
+                    await ExecuteWebhookJobAsync(snapshot, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "执行 Webhook 任务时发生错误。");
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Webhook 后台任务已取消。");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Webhook 后台任务意外终止。");
+        }
+    }
+
+    private async Task ExecuteWebhookJobAsync(WebhookSnapshot snapshot, CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("正在尝试 Webhook");
+
+        try
+        {
+            // POST重试，共3次
+            for (int j = 0; j <= 3; j++)
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Post, snapshot.WebhookUrl);
+                request.Content = new StringContent(snapshot.RawBody, Encoding.UTF8, "application/json");
+                request.Headers.TryAddWithoutValidation("X-Webhook-Timestamp", snapshot.Timestamp);
+                request.Headers.TryAddWithoutValidation("X-Webhook-Signature-V2", snapshot.Signature);
+                request.Headers.TryAddWithoutValidation("X-Request-ID", snapshot.RequestId);
+
+                using var response = await _httpClient.SendAsync(request, cancellationToken);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("推送成功 (Webhooks)。");
+                    await PollAgentMessageAsync(snapshot.MessagesUrl, cancellationToken);
+                    return;
+                }
+
+                if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                {
+                    // 限流，等待 3 秒，最多重复3次
+                    _logger.LogWarning("(Webhooks) 请求数过多，退避等待，重复次数：{Count}", j);
+                    if (j == 3)
+                    {
+                        _logger.LogError("(Webhooks) 请求数过多");
+                        UpdateStatus(SyncStatus.Error, "拉取Agent消息时出现异常");
+                        return;
+                    }
+
+                    await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken);
+                }
+                else if (response.StatusCode == HttpStatusCode.InternalServerError)
+                {
+                    // 服务器问题 / Hermes 问题
+                    _logger.LogWarning("(Webhooks) 服务器内部出错，重复次数：{Count}", j);
+                    if (j == 3)
+                    {
+                        _logger.LogError("(Webhooks) 服务器内部出错");
+                        UpdateStatus(SyncStatus.Error, "拉取Agent消息时出现异常");
+                        return;
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning("(Webhooks) 推送至 Hermes时出错，重复次数：{Count}", j);
+                    if (j == 3)
+                    {
+                        _logger.LogError("(Webhooks) 推送至 Hermes时出错。Http: {StatusCode}", (int)response.StatusCode);
+                        UpdateStatus(SyncStatus.Error, "拉取Agent消息时出现异常");
+                        return;
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Webhook 任务已取消。");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            _logger.LogError("(Webhooks) 推送至 Hermes时出错: {Message}", ex.Message);
+            UpdateStatus(SyncStatus.Error, "拉取Agent消息时出现异常");
+        }
+    }
+
+    private async Task PollAgentMessageAsync(string messagesUrl, CancellationToken cancellationToken)
+    {
+        var success = false;
+
+        // 等待 Agent反应后拉取 Messages，最多重试 3 次，每次等待 30 秒
+        for (int i = 0; i <= 3; i++)
+        {
+            await Task.Delay(_agentReactionPollInterval, cancellationToken);
+
+            try
+            {
+                using var msgResponse = await _httpClient.GetAsync(new Uri(messagesUrl), cancellationToken);
+
+                if (msgResponse.StatusCode == HttpStatusCode.OK)
+                {
+                    var template = new
+                    {
+                        Exist = false,
+                        Text = "",
+                        Time = ""
+                    };
+
+                    dynamic? m = await msgResponse.Content.ReadFromJsonAsync(template.GetType(), SnakeCaseOption);
+                    if (m is null)
+                    {
+                        _logger.LogWarning("远端messages-to-user.json 已损坏或不存在。已重复：{Count}", i);
+                        continue;
+                    }
+
+                    if (m.Exist == true)
+                    {
+                        GetMessageSuccessful?.Invoke(this, new GetMessageSuccessfulEventArgs(m.Text));
+                        success = true;
+                    }
+
+                    _logger.LogInformation("Webhooks重试第{Count}次，messages-to-user.json 仍未被创建", i);
+                }
+                else if (msgResponse.StatusCode == HttpStatusCode.InternalServerError)
+                {
+                    var template = new
+                    {
+                        Detail = ""
+                    };
+
+                    dynamic? m = await msgResponse.Content.ReadFromJsonAsync(template.GetType(), SnakeCaseOption);
+                    if (m is not null)
+                    {
+                        _logger.LogWarning("Webhooks时服务器内部出现问题: {Detail}，重试第{Count}次。", (string?)m.Detail, i);
+
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning("Webhooks时出现问题, Http: {StatusCode}，重试第{Count}次。", (int)msgResponse.StatusCode, i);
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Webhooks时发生错误。重试次数：{Count}", i);
+            }
+            finally
+            {
+                if (success)
+                {
+                    _logger.LogInformation("Webhook成功，Agent消息已拉取");
+                    UpdateStatus(SyncStatus.Success, null);
+                }
+                else
+                {
+                    UpdateStatus(SyncStatus.Error, "拉取Agent消息时出现异常");
+                }
+            }
+
+            if (success)
+                break;
+        }
     }
 
     /// <summary>
@@ -580,7 +839,7 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
     /// 决定是否需要拉取。调用方必须持有 <see cref="_gate"/>。
     /// </summary>
     /// <returns>
-    /// 拉取决策与服务器 todo.json 的创建时间；失败时置 <see cref="SyncStatus.Error"/> 并返回 null。
+    /// 拉取决策与服务器todo.json 的创建时间；失败时置 <see cref="SyncStatus.Error"/> 并返回 null。
     /// </returns>
     private async Task<MetaResult?> FetchMetaAsync()
     {
@@ -624,7 +883,7 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
             needPull = true;
         }
         else if (!DateTimeOffset.TryParse(_settings.LastSyncedAt, CultureInfo.InvariantCulture,
-            DateTimeStyles.AssumeUniversal, out var lastSyncedAt))
+                     DateTimeStyles.AssumeUniversal, out var lastSyncedAt))
         {
             needPull = true;
         }
@@ -696,7 +955,7 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
     }
 
     /// <summary>
-    /// 服务器 todo.json 创建时间不晚于上次同步时：仅推送本地待处理项。
+    /// 服务器todo.json 创建时间不晚于上次同步时：仅推送本地待处理项。
     /// 调用方必须持有 <see cref="_gate"/>。
     /// </summary>
     private async Task PushPendingOnlyAsync()
@@ -726,6 +985,13 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
         Status = newStatus;
         LastError = error;
         StatusChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void Dispose()
+    {
+        _webhookCts.Cancel();
+        _channel.Writer.TryComplete();
+        _webhookCts.Dispose();
     }
 
     private static TodoItem Copy(TodoItem item) => new()

@@ -10,7 +10,7 @@
 
 | 目录 | 内容 | 备注 |
 |---|---|---|
-| `Views/` | `MainWindow.axaml*`（桌面 SukiWindow）、`MainView.axaml*`（单视图/移动）、`SettingsPageView.axaml*`、`Todo/TodoPageView.axaml*` | 全部 `UserControl`（除 MainWindow）；`ViewLocator` 按命名空间映射 |
+| `Views/` | `MainWindow.axaml*`（桌面 SukiWindow）、`MainView.axaml*`（单视图/移动）、`SettingsPageView.axaml*`、`Todo/TodoPageView.axaml*`、`TalkView.axaml*` | 全部 `UserControl`（除 MainWindow）；`ViewLocator` 按命名空间映射 |
 | `Controls/` | 平铺三件套：`BottomNavigationBar.axaml*`、`BottomNavigationItem.axaml*`、`SyncStatusBar.axaml*` | 自定义控件自带主题 `.axaml`，并入 `App.axaml` `Application.Resources` |
 | `ViewModels/` | `MainViewModel`、`SettingsPageViewModel` | Avalonia 侧 VM（Core 的 `TodoPageViewModel` 在 Core 里） |
 | `Models/`+`Abstracts/` | `NavigationItem` + `INavigationItem` | 底部导航数据模型 |
@@ -34,9 +34,9 @@
 
 ## DI（`App.axaml.cs` `ConfigureServices()`）
 
-- Core 全套：`ITodoRepository→JsonTodoRepository`、`ITodoService→TodoService`、`HttpClient`、`IHermesSettingsRepository→JsonHermesSettingsRepository`、`IHermesSyncService→HermesSyncService`（全 Singleton）。
-- 页面 VM：`TodoPageViewModel`（Core）、`SettingsPageViewModel`、`MainViewModel`（本目录）全 Singleton。
-- 生命周期：桌面 → `MainWindow`；移动/单视图 → `MainView`。**启动同步即发即忘、关闭冲刷尽力而为**，绝不在 UI 线程阻塞于网络（`IHermesSyncService.FlushAsync` 契约「绝不抛异常」）。
+- Core 全套：`ITodoRepositoryService→TodoRepoService`、`ITodoService→TodoService`、`HttpClient`、`IRemoteServerSettingsRepository→RemoteServerSettingsService`、`IRemoteSyncService→RemoteSyncService`（全 Singleton）。
+- 页面 VM：`TodoPageViewModel`（Core）、`SettingsPageViewModel`、`TalkViewModel`（Core）、`MainViewModel`（本目录）全 Singleton。
+- 生命周期：桌面 → `MainWindow`；移动/单视图 → `MainView`。**启动同步即发即忘、关闭冲刷尽力而为**，绝不在 UI 线程阻塞于网络（`IRemoteSyncService.FlushAsync` 契约「绝不抛异常」）。
 - 新 VM 记得在此注册，且保持 `XxxViewModel`/`XxxView` 成对平行命名空间（见 ViewLocator 节）。
 
 ## ANTI-PATTERNS

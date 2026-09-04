@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:MashiruDaily"
              xmlns:suki="https://github.com/kikipoulet/SukiUI"
+             xmlns:markdown="https://codewf.com"
              x:Class="MashiruDaily.App"
              RequestedThemeVariant="Default">
     <!-- "Default" 主题变体跟随系统主题；"Dark" 或 "Light" 是其他可选值。 -->
@@ -9,7 +10,7 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <!-- 扩展 SukiUI 的自定义控件 -->
+                <!-- 扩展的自定义控件 -->
                 <ResourceInclude Source="/Controls/BottomNavigationBar.axaml" />
                 <ResourceInclude Source="/Controls/BottomNavigationItem.axaml" />
             </ResourceDictionary.MergedDictionaries>
@@ -24,5 +25,6 @@
         <FluentTheme />
         <!-- SukiUI 负责外观与风格；参见 https://kikipoulet.github.io/SukiUI/ -->
         <suki:SukiTheme Locale="zh-CN" ThemeColor="Blue" />
+        <markdown:MarkdownThemes />
     </Application.Styles>
 </Application>

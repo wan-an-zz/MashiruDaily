@@ -1,9 +1,4 @@
-"""GET /api/todo 与 GET /api/todo/meta 的 API 集成测试。
-
-面向后续任务中的 app/main.py 编写（测试优先）：本文件在模块顶层只导入
-标准库与 pytest，app.main 在 fixture 内懒加载——当前阶段 app.main 尚不
-存在，用例会以 ERROR 呈现（预期的 RED 状态），待 main.py 落地后自动转绿。
-"""
+"""FastAPI 拉取、元数据与事件接收端点的离线契约测试。"""
 
 import json
 import os
@@ -196,7 +191,7 @@ def test_meta_sidecar_non_object_returns_json_500(client, data_dir) -> None:
 
 
 def test_created_at_survives_webhook_edit_but_stamp_changes_it(client, data_dir) -> None:
-    """webhook 式编辑后 created_at 不变（count 增加）；todo_meta_stamp 运行后 created_at 改变。"""
+    """客户端推送式编辑后 created_at 不变（count 增加）；todo_meta_stamp 运行后 created_at 改变。"""
     # Given: 初始 todo.json 与侧车
     _atomic_write(
         data_dir / "todo.json",
@@ -205,7 +200,7 @@ def test_created_at_survives_webhook_edit_but_stamp_changes_it(client, data_dir)
     meta_before = client.get("/api/todo/meta").json()
     created_before = meta_before["created_at"]
 
-    # When: 模拟 webhook 编辑（追加一条）后请求 meta
+    # When: 模拟客户端推送式编辑（追加一条）后请求 meta
     _atomic_write(
         data_dir / "todo.json",
         json.dumps([_item("1", "买牛奶"), _item("2", "写周报")], ensure_ascii=False),
@@ -254,7 +249,7 @@ def test_meta_count_is_live(client, data_dir) -> None:
 
 
 def _update_envelope(event_type: str, item: _TodoFixture) -> dict:
-    """构造一条与 C# 端 HermesSyncService.SendAsync 逐字段一致的推送事件。
+    """构造一条与 C# 端 RemoteSyncService.SendAsync 逐字段一致的推送事件。
 
     客户端序列化使用 snake_case：event_type / timestamp / payload 三层嵌套，
     payload 内恰为 id/title/is_completed/created_at/completed_at 五个字段。
@@ -366,3 +361,41 @@ def test_update_rejects_malformed_body(client, data_dir) -> None:
 
     # Then: 422
     assert resp.status_code == 422
+
+
+def test_messages_missing_returns_exist_false(client, data_dir) -> None:
+    """messages-to-user.json 不存在时 GET /api/messages 应返回 exist=false。"""
+    resp = client.get("/api/messages")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"exist": False, "text": "", "time": ""}
+
+
+def test_messages_existing_returns_text_and_time(client, data_dir) -> None:
+    """messages-to-user.json 合法时 GET /api/messages 应返回消息内容。"""
+    _atomic_write(
+        data_dir.parent / "messages-to-user.json",
+        json.dumps(
+            {"text": "今天记得完成数学作业", "time": "2026-08-22T21:00:00+08:00"},
+            ensure_ascii=False,
+        ),
+    )
+
+    resp = client.get("/api/messages")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "exist": True,
+        "text": "今天记得完成数学作业",
+        "time": "2026-08-22T21:00:00+08:00",
+    }
+
+
+def test_messages_malformed_returns_json_500(client, data_dir) -> None:
+    """messages-to-user.json 结构不合法时 GET /api/messages 应返回 500 JSON detail。"""
+    _atomic_write(data_dir.parent / "messages-to-user.json", '{"text": "缺 time"}')
+
+    resp = client.get("/api/messages")
+
+    assert resp.status_code == 500
+    assert "detail" in resp.json()

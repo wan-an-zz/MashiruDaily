@@ -3,7 +3,9 @@
 用系统 Python（纯标准库，无第三方依赖）按序串联六个幂等子脚本：
 setup_server → register_hermes_plugin → configure_webhook → configure_cron →
 install_autostart → 启动验证（/health 与 /api/todo/meta）。任一环节失败立即
-终止（fail-fast），各子脚本幂等、可重复运行。
+终止（fail-fast），各子脚本幂等、可重复运行。Windows 非管理员下
+install_autostart 不自动提权，以退出码 2 表示「需用户手动完成」——此时不中断
+流程，改在末尾汇总提示用户按指引手动注册开机自启。
 
 用法（在 MashiruDaily.Server 目录下用系统 Python 运行）：
     python bootstrap.py --secret <密钥>                    # 完整初始化
@@ -21,6 +23,8 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+import install_autostart
 
 # 服务器根目录（即本脚本所在目录）
 SERVER_ROOT = Path(__file__).resolve().parent
@@ -71,8 +75,7 @@ def _check_venv_python(venv_py: Path) -> bool:
     if venv_py.is_file():
         return True
     _remember_action_prompt(
-        f"[FAIL] 未找到虚拟环境解释器 {venv_py}。请先运行 setup_server.py 创建虚拟环境，或去掉 --skip-setup。",
-        file=sys.stderr,
+        f"[FAIL] 未找到虚拟环境解释器 {venv_py}。请先运行 setup_server.py 创建虚拟环境，或去掉 --skip-setup。"
     )
     return False
 
@@ -264,8 +267,7 @@ def _main(argv: list[str] | None = None) -> int:
         secret = args.secret or os.environ.get("MASHIRU_WEBHOOK_SECRET")
         if not secret:
             _remember_action_prompt(
-                "[FAIL] 缺少 webhook 密钥：请通过 --secret <密钥> 或环境变量 MASHIRU_WEBHOOK_SECRET 提供。",
-                file=sys.stderr,
+                "[FAIL] 缺少 webhook 密钥：请通过 --secret <密钥> 或环境变量 MASHIRU_WEBHOOK_SECRET 提供。"
             )
             return 1
         base_env = dict(os.environ)
@@ -279,10 +281,13 @@ def _main(argv: list[str] | None = None) -> int:
         if rc == 1:
             print(f"[FAIL] configure_webhook.py 失败（退出码 {rc}）。", file=sys.stderr)
             return rc
-        elif rc == 2:
+        if rc == 2:
             _remember_action_prompt("[提示] Hermes 拒绝在 root 下重启网关，webhook 配置已写入 config.yaml，\n将在 Hermes 下次重启时生效。本次未执行重启；可手动重启或等待下次重启。\n建议运行`sudo systemctl restart hermes-gateway.service完成重启`。")
         elif rc == 3:
             _remember_action_prompt("[提示] Hermes 拒绝在 root 下重启网关，webhook 配置已写入 config.yaml，\n将在 Hermes 下次重启时生效。本次未执行重启；可手动重启或等待下次重启。\n建议在Hermes所属用户下运行`hermes gateway restart`或`sudo systemctl restart hermes-gateway.service完成重启`")
+        elif rc != 0:
+            print(f"[FAIL] configure_webhook.py 失败（退出码 {rc}）。", file=sys.stderr)
+            return rc
         print("[OK] configure_webhook.py 完成。")
         
         if args.no_restart and not args.dry_run:
@@ -318,10 +323,20 @@ def _main(argv: list[str] | None = None) -> int:
         else:
             autostart_cmd = [str(venv_py), "install_autostart.py"]
         rc = _execute(autostart_cmd)
-        if rc != 0:
+        if rc == install_autostart.EXIT_MANUAL_REQUIRED:
+            rerun_cmd = subprocess.list2cmdline(
+                [str(venv_py), str(SERVER_ROOT / "install_autostart.py")]
+            )
+            _remember_action_prompt(
+                "[提示] Windows 开机自启未注册：需要管理员权限。"
+                f"请以管理员身份打开终端后执行：{rerun_cmd}"
+            )
+            print("[待手动] 开机自启注册需手动完成（见上方指引，末尾会再次提示）。")
+        elif rc != 0:
             print(f"[FAIL] install_autostart.py 失败（退出码 {rc}）。", file=sys.stderr)
             return rc
-        print("[OK] install_autostart.py 完成。")
+        else:
+            print("[OK] install_autostart.py 完成。")
 
     # 步骤 6/6：启动验证
     print("\n[6/6] 启动验证：检查 /health 与 /api/todo/meta")

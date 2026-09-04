@@ -10,7 +10,7 @@ using MashiruDaily.Core.Models;
 namespace MashiruDaily.Core.ViewModels.Todo;
 
 /// <summary>
-/// Todo 功能的页面视图模型。将 <see cref="ITodoService"/> 的待办拆分为
+/// 待办功能的页面视图模型。将 <see cref="ITodoService"/> 的待办拆分为
 /// 「待完成」与「已完成」两类，并暴露新增、编辑、删除、切换完成状态的命令。
 /// </summary>
 public partial class TodoPageViewModel : ViewModelBase

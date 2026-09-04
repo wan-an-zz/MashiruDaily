@@ -8,6 +8,7 @@ using Avalonia.Media;
 using MashiruDaily.Core.Abstracts;
 using MashiruDaily.Core.Logging;
 using MashiruDaily.Core.Services;
+using MashiruDaily.Core.ViewModels;
 using MashiruDaily.Core.ViewModels.Todo;
 using MashiruDaily.ViewModels;
 using MashiruDaily.Views;
@@ -38,7 +39,7 @@ public partial class App : Application
 
         var logger = Services.GetRequiredService<ILogger<App>>();
 
-        // 即发即忘的 Hermes 启动同步；绝不在启动时阻塞 UI 于网络请求。
+        // 即发即忘的远程同步启动；绝不在启动时阻塞 UI 于网络请求。
         _ = SyncStartupAsync(Services.GetRequiredService<IRemoteSyncService>(), logger);
         logger.LogInformation("MashiruDaily 启动中（桌面={IsDesktop}）。",
             ApplicationLifetime is IClassicDesktopStyleApplicationLifetime);
@@ -73,7 +74,7 @@ public partial class App : Application
         var todoService = Services.GetRequiredService<ITodoService>();
         await todoService.FlushAsync();
 
-        // 退出时尽力排空待处理的 Hermes Webhook 事件；绝不在关闭时阻塞。
+        // 退出时尽力排空待处理的远程同步事件；绝不在关闭时阻塞。
         try
         {
             await Services.GetRequiredService<IRemoteSyncService>().FlushAsync();
@@ -81,7 +82,7 @@ public partial class App : Application
         catch (Exception ex)
         {
             Services.GetRequiredService<ILogger<App>>()
-                .LogError(ex, "关闭时的 Hermes 同步冲刷失败。");
+                .LogError(ex, "关闭时的远程同步冲刷失败。");
         }
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
@@ -96,7 +97,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Hermes 同步初始化失败。");
+            logger.LogError(ex, "远程同步初始化失败。");
         }
     }
 
@@ -130,7 +131,7 @@ public partial class App : Application
         services.AddSingleton<ITodoRepositoryService, TodoRepoService>();
         services.AddSingleton<ITodoService, TodoService>();
 
-        // Hermes 同步
+        // 远程同步
         services.AddSingleton<HttpClient>();
         services.AddSingleton<IRemoteServerSettingsRepository, RemoteServerSettingsService>();
         services.AddSingleton<IRemoteSyncService, RemoteSyncService>();
@@ -139,6 +140,7 @@ public partial class App : Application
         services.AddSingleton<TodoPageViewModel>();
         services.AddSingleton<SettingsPageViewModel>();
         services.AddSingleton<MainViewModel>();
+        services.AddSingleton<TalkViewModel>();
 
         return services.BuildServiceProvider();
     }

@@ -1,0 +1,30 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:suki="https://github.com/kikipoulet/SukiUI"
+             xmlns:md="https://codewf.com"
+             xmlns:vm="using:MashiruDaily.Core.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="MashiruDaily.Views.TalkView"
+             x:DataType="vm:TalkViewModel">
+
+    <Grid RowDefinitions="Auto,*" Margin="24">
+
+        <TextBlock Grid.Row="0"
+                   Margin="0,0,0,16"
+                   FontSize="28"
+                   FontWeight="Bold"
+                   Foreground="{DynamicResource SukiText}"
+                   Text="Agent" />
+
+        <suki:GlassCard Grid.Row="1" Padding="20">
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+                <md:MarkdownViewer Markdown="{Binding AgentMessage}"
+                                   TypographyTheme="Simple" />
+            </ScrollViewer>
+        </suki:GlassCard>
+
+    </Grid>
+</UserControl>

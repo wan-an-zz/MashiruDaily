@@ -1,8 +1,7 @@
-"""MashiruDaily 拉取服务器：向 C# 客户端暴露 GET /api/todo/meta、GET /api/todo 与 /health。
+"""MashiruDaily FastAPI 服务器：提供拉取、消息读取与待办事件接收接口。
 
-契约来源：docs/design/通信协议.md §5。字段名须与 C# 端 System.Text.Json
-（大小写敏感 snake_case）逐字节对齐；客户端启动时先拉 meta 比对 created_at，
-再拉全量列表整体替换本地数据——因此任何额外的键（如本地字段 has_synced）都不得出现。
+契约见 docs/api&webhooks/通信协议.md。网络 JSON 字段统一使用 snake_case，
+不传输客户端本地字段 has_synced。
 """
 
 from fastapi import FastAPI, Request
@@ -11,7 +10,7 @@ from pydantic import BaseModel
 from json import loads
 
 from app.config import get_settings
-from app.todo_store import current_meta, load_todo_list
+from app.funcs import current_meta, load_todo_list, current_messages
 from hermes_plugin.mashiru_daily.tools import todo_upsert, todo_delete
 
 app = FastAPI()
@@ -43,7 +42,7 @@ class update_todo_msg(BaseModel):
 
 @app.exception_handler(ValueError)
 async def _value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
-    """todo.json / todo-meta.json 非法时由 store 抛 ValueError，统一映射为 HTTP 500。"""
+    """数据文件非法时统一返回 HTTP 500 JSON，错误详情放在 detail。"""
     return JSONResponse(status_code=500, content={"detail": str(exc)})
 
 
@@ -57,6 +56,11 @@ def get_meta() -> dict:
 def get_todo_list() -> list:
     """返回 todo.json 全量列表，snake_case 逐字透传（不含 has_synced）；缺失时返回空数组。"""
     return load_todo_list()
+
+@app.get("/api/messages")
+def get_messages() -> dict:
+    """返回当前 Agent 消息。"""
+    return current_messages()
 
 
 @app.get("/health")

@@ -1,15 +1,11 @@
-"""configure_webhook.py 网关重启降级逻辑的离线契约测试（测试优先，全部 mock）。
-
-面向 configure_webhook._restart_gateway 与 main(argv) 编写（测试优先）：当前
-_restart_gateway 尚不存在、main 不接受 argv 参数，用例会以 AttributeError /
-TypeError 呈现（预期的 RED 状态），待实现落地后自动转绿。
+"""configure_webhook.py 网关重启降级逻辑的离线契约测试（全部 mock）。
 
 根因背景（Hermes 源码 NousResearch/hermes-agent hermes_cli/gateway.py
 _system_service_identity，L2300-2303）：以 root 运行 `hermes gateway restart`
 且网关为 systemd 系统服务时，Hermes 拒绝刷新 systemd 单元并抛未捕获的
 ValueError（裸 traceback 进 stderr，退出码 1）；root 下用户级 D-Bus 不可达时
 报 "User systemd not reachable"（print_error 写 stdout，退出码 1）。两者均为
-配置已成功写入、仅重启动作受限的良性场景，应降级为提示而非失败。
+配置已成功写入、仅重启动作受限的良性场景，应降级为提示（返回 2/3）而非失败。
 """
 
 import sys
@@ -56,7 +52,7 @@ def test_restart_success_returns_zero(monkeypatch, capsys) -> None:
 
 
 def test_restart_root_refusal_degrades(monkeypatch, capsys) -> None:
-    """root 拒绝刷新 systemd 单元（stderr 含 Hermes 拒绝消息）→ 返回 0 并提示下次重启生效。"""
+    """root 拒绝刷新 systemd 单元（stderr 含 Hermes 拒绝消息）→ 返回 2 并提示下次重启生效。"""
     _monkey_restart(
         monkeypatch,
         _FakeCompleted(
@@ -67,20 +63,20 @@ def test_restart_root_refusal_degrades(monkeypatch, capsys) -> None:
         ),
     )
     rc = configure_webhook._restart_gateway("C:/fake/hermes.exe")
-    assert rc == 0
+    assert rc == 2
     out = capsys.readouterr().out
     assert "WARN" in out
     assert "config.yaml" in out and "下次重启" in out
 
 
 def test_restart_user_systemd_unreachable_degrades(monkeypatch, capsys) -> None:
-    """root 下用户级 systemd 不可达（stdout 含 User systemd not reachable）→ 返回 0。"""
+    """root 下用户级 systemd 不可达（stdout 含 User systemd not reachable）→ 返回 3。"""
     _monkey_restart(
         monkeypatch,
         _FakeCompleted(returncode=1, stdout="User systemd not reachable:\n  ..."),
     )
     rc = configure_webhook._restart_gateway("C:/fake/hermes.exe")
-    assert rc == 0
+    assert rc == 3
     out = capsys.readouterr().out
     assert "WARN" in out
 
@@ -96,7 +92,7 @@ def test_restart_signal_on_stdout_still_degrades(monkeypatch, capsys) -> None:
         ),
     )
     rc = configure_webhook._restart_gateway("C:/fake/hermes.exe")
-    assert rc == 0
+    assert rc == 2
     assert "WARN" in capsys.readouterr().out
 
 
@@ -151,8 +147,8 @@ def _config_chain(monkeypatch, tmp_path: Path):
     return cfg
 
 
-def test_main_restart_root_refusal_returns_zero(monkeypatch, tmp_path, capsys) -> None:
-    """集成：config 写入成功 + 重启被 root 拒绝 → main 返回 0（配置成功不应判失败）。"""
+def test_main_restart_root_refusal_returns_two(monkeypatch, tmp_path, capsys) -> None:
+    """集成：config 写入成功 + 重启被 root 拒绝 → main 返回 2（配置成功但提示下次重启生效）。"""
     _config_chain(monkeypatch, tmp_path)
     _monkey_restart(
         monkeypatch,
@@ -163,9 +159,21 @@ def test_main_restart_root_refusal_returns_zero(monkeypatch, tmp_path, capsys) -
         ),
     )
     rc = configure_webhook.main(["--secret", "s3cr3t"])
-    assert rc == 0
+    assert rc == 2
     out = capsys.readouterr().out
     assert "WARN" in out and "下次重启" in out
+
+
+def test_main_restart_user_systemd_unreachable_returns_three(monkeypatch, tmp_path, capsys) -> None:
+    """集成：config 写入成功 + 用户级 systemd 不可达 → main 返回 3（区别于 root 拒绝）。"""
+    _config_chain(monkeypatch, tmp_path)
+    _monkey_restart(
+        monkeypatch,
+        _FakeCompleted(returncode=1, stdout="User systemd not reachable:\n  ..."),
+    )
+    rc = configure_webhook.main(["--secret", "s3cr3t"])
+    assert rc == 3
+    assert "WARN" in capsys.readouterr().out
 
 
 def test_main_restart_unrelated_failure_returns_one(monkeypatch, tmp_path) -> None:
@@ -201,3 +209,68 @@ def test_main_restart_success_returns_zero(monkeypatch, tmp_path) -> None:
     _monkey_restart(monkeypatch, _FakeCompleted(returncode=0))
     rc = configure_webhook.main(["--secret", "s3cr3t"])
     assert rc == 0
+
+
+def test_main_writes_route_without_skill_and_prompts_speak_to_user(
+    monkeypatch, tmp_path
+) -> None:
+    """集成：todo-sync 路由应写入 events/secret/prompt/toolsets，且不再挂 skill。"""
+    cfg = _config_chain(monkeypatch, tmp_path)
+    rc = configure_webhook.main(["--secret", "s3cr3t", "--no-restart"])
+    assert rc == 0
+
+    yaml_obj = configure_webhook._config.new_yaml()
+    data = configure_webhook._config.load_config(yaml_obj, cfg)
+    route = data["platforms"]["webhook"]["extra"]["routes"]["todo-sync"]
+
+    assert route["events"] == ["update"]
+    assert route["secret"] == "s3cr3t"
+    assert route["toolsets"] == ["mashiru_daily"]
+    assert "skills" not in route
+    prompt = str(route["prompt"])
+    assert "TODO_LIST" in prompt
+    assert "SPEAK_TO_USER" in prompt
+    assert "禁止修改" in prompt
+
+
+def test_main_new_route_is_idempotent_without_skill_rewrite(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    """集成：相同 secret 再次运行时命中 SKIP，不重复备份/改写。"""
+    cfg = _config_chain(monkeypatch, tmp_path)
+    assert configure_webhook.main(["--secret", "s3cr3t", "--no-restart"]) == 0
+    capsys.readouterr()
+    backups_after_first = list(tmp_path.glob("config.yaml.bak-*"))
+    assert len(backups_after_first) == 1
+
+    assert configure_webhook.main(["--secret", "s3cr3t", "--no-restart"]) == 0
+    out = capsys.readouterr().out
+    backups_after_second = list(tmp_path.glob("config.yaml.bak-*"))
+
+    assert "[SKIP]" in out
+    assert len(backups_after_second) == 1
+
+
+def test_webhook_identical_accepts_desired_route_without_skills() -> None:
+    """幂等比较应兼容新路由不再携带 skills 键的期望配置。"""
+    desired = {
+        "events": ["update"],
+        "secret": "s3cr3t",
+        "prompt": "调用 SPEAK_TO_USER 回应用户",
+        "toolsets": ["mashiru_daily"],
+    }
+
+    def webhook_block(route: dict) -> dict:
+        return {
+            "enabled": True,
+            "extra": {
+                "port": configure_webhook.WEBHOOK_PORT,
+                "routes": {"todo-sync": route},
+            },
+        }
+
+    assert configure_webhook._webhook_identical(webhook_block(dict(desired)), desired)
+
+    stale = dict(desired)
+    stale["skills"] = ["webhook-todo-sync"]
+    assert not configure_webhook._webhook_identical(webhook_block(stale), desired)

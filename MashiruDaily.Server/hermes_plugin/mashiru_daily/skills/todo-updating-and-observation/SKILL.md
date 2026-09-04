@@ -13,7 +13,7 @@ description: 需要对todo.json做出任意更改或查看todo.json时使用
 
 ## 前置条件
 
-1. **MashiruDaily 插件已安装**：工具集 `mashiru_daily`（含 `todo_upsert` / `todo_completed` / `todo_delete` 等 8 个工具）可用。
+1. **MashiruDaily 插件已安装**：工具集 `mashiru_daily`（含 `todo_upsert` / `todo_completed` / `todo_delete` / `speak_to_user` 等 9 个工具）可用。
 2. **todo.json 可写**：插件数据目录（`MASHIRU_DATA_DIR`）权限正常。
 
 ## 工作流程

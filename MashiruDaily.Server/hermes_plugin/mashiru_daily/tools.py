@@ -1,6 +1,7 @@
-"""Hermes 插件工具实现：读写 MashiruDaily 数据目录下的 todo.json 与 todo-meta.json。
+"""Hermes 插件工具实现：读写 MashiruDaily 的 todo.json、todo-meta.json 与 messages-to-user.json。
 
-数据目录默认在 $HOME/.mashiru-daily/todos/（可用环境变量 MASHIRU_DATA_DIR 覆盖）。
+数据目录默认在 $HOME/.mashiru-daily/todos/（可用 MASHIRU_DATA_DIR 覆盖）；
+消息文件位于数据目录的父目录。
 
 设计约束：
 - 只依赖 Python 标准库，便于 Hermes 进程直接加载；
@@ -27,8 +28,8 @@ def _data_dir() -> Path:
     return Path.home() / ".mashiru-daily" / "todos"
 
 def _msg_path() -> Path:
-    """返回数据目录下的 messages-to-user.json 路径。"""
-    return _data_dir() / "messages-to-user.json"
+    """返回数据目录父目录下的 messages-to-user.json 路径。"""
+    return _data_dir().parent / "messages-to-user.json"
 
 def _todo_path() -> Path:
     """返回数据目录下的 todo.json 路径。"""
@@ -81,7 +82,7 @@ def _new_item(
     is_completed: bool = False,
     completed_at: str | None = None
 ) -> dict:
-    """根据标题生成一条完整待办；id 默认由程序生成，传入 item_id 时使用该 id；is_completed/completed_at 供 webhook 同步场景透传。"""
+    """根据标题生成一条完整待办；id 默认由程序生成，传入 item_id 时使用该 id；is_completed/completed_at 供客户端同步场景透传。"""
     return {
         "id": item_id if item_id is not None else str(uuid.uuid4()),
         "title": title,
@@ -305,13 +306,16 @@ def todo_meta_stamp(args: dict, **kwargs) -> str:
         return _err(exc)
 
 def speak_to_user(args: dict, **kwargs) -> str:
+    """向用户留一句话，写入消息文件。"""
     try:
         text = args.get("text")
+        time = _now_cst_iso()
+
         if not isinstance(text, str):
             return _err("参数 text 必须是字符串")
 
-        _atomic_write_json(_msg_path(), {"text": text})
-        
+        _atomic_write_json(_msg_path(), {"text": text, "time": time})
+
         return _ok({"success": True, "text": text})
     except Exception as exc:
         return _err(exc)
