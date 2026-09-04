@@ -206,6 +206,17 @@ def test_autostart_failure_recorded(monkeypatch) -> None:
     assert not uninstall._remove_autostart(dry_run=False, skip=False)
 
 
+def test_autostart_manual_exit_2_is_not_failure(monkeypatch) -> None:
+    """install_autostart 返回 2（Windows 非管理员、需手动完成）→ 步骤不算失败，并记录手动提示。"""
+    uninstall._ACTION_PROMPTS.clear()
+    try:
+        _monkey_run(monkeypatch, returncode=2)
+        assert uninstall._remove_autostart(dry_run=False, skip=False)
+        assert any("开机自启" in p and "管理员" in p for p in uninstall._ACTION_PROMPTS)
+    finally:
+        uninstall._ACTION_PROMPTS.clear()
+
+
 # ---------------------------------------------------------------------------
 # 步骤 3：删除每日 cron 任务
 # ---------------------------------------------------------------------------

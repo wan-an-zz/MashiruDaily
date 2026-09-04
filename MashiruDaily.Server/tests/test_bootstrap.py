@@ -318,6 +318,22 @@ def test_webhook_user_systemd_is_nonfatal_and_prompted(monkeypatch, capsys) -> N
     assert "Hermes所属用户" in out
 
 
+def test_autostart_manual_exit_is_nonfatal_and_prompted(monkeypatch, capsys) -> None:
+    """install_autostart 返回 2（Windows 非管理员、需手动完成）→ 不判失败、继续流程，末尾重放手动提示。"""
+    monkeypatch.setattr(Path, "is_file", lambda self: True)
+    calls = _monkey_run(monkeypatch, "install_autostart.py", returncode=2)
+    rc = bootstrap.main(["--skip-setup", "--skip-skills", "--skip-webhook",
+                         "--skip-cron", "--no-verify"])
+    assert rc == 0
+    assert any("install_autostart.py" in c for c, _ in calls)
+    out = capsys.readouterr().out
+    assert "以下操作需要您手动完成，请勿遗漏：" in out
+    assert "开机自启" in out
+    assert "管理员" in out
+    assert "install_autostart.py" in out
+    assert "[FAIL] install_autostart.py 失败" not in out
+
+
 # ---------------------------------------------------------------------------
 # dry-run
 # ---------------------------------------------------------------------------
