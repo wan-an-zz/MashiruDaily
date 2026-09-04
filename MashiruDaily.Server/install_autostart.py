@@ -141,11 +141,11 @@ def _schtasks_exists() -> bool:
 
 
 def _win_task_command() -> str:
-    """构造 schtasks /TR 的启动命令：cmd /c cd 到项目根后运行 pythonw -m app.main。
+    """构造 schtasks /TR 的启动命令
 
-    /RU SYSTEM 的工作目录是 system32，python -m 找不到 app 包，必须显式 cd。
-    项目路径不含空格时可省去嵌套引号（schtasks 的 /TR 引号解析有坑）；
-    含空格则拒绝并提示（可迁移到无空格路径或用 8.3 短路径）。
+    pythonw 无控制台时 sys.stdout/sys.stderr 为 None，
+    uvicorn 默认日志格式器会调用 sys.stdout.isatty() 抛 AttributeError，
+    导致进程启动即退出（计划任务上次结果 = 1）。重定向到文件后服务才能常驻。
     """
     root = _server_root()
     pythonw = _venv_python()
@@ -155,7 +155,8 @@ def _win_task_command() -> str:
             file=sys.stderr,
         )
         raise SystemExit(1)
-    return f"cmd /c cd /d {root} && {pythonw} -m app.main"
+    log_path = root / "autostart.log"
+    return f"cmd /c cd /d {root} && {pythonw} -m app.main >> {log_path} 2>&1"
 
 
 def _install_windows(args) -> int:
