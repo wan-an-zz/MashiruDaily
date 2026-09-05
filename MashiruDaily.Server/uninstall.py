@@ -230,6 +230,7 @@ def _remove_autostart(dry_run: bool, skip: bool) -> bool:
         _remember_action_prompt(
             "[提示] Windows 开机自启未删除：需要管理员权限。"
             f"请以管理员身份打开终端后执行：{rerun_cmd}"
+            "或cd进入脚本目录后执行：python install_autostart.py --uninstall"
         )
         return True
     if result.returncode != 0:
