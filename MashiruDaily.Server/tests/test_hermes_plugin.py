@@ -226,18 +226,18 @@ def test_todo_meta_get_initializes_and_count_live(plugin_data_dir) -> None:
     _invoke(tools.todo_save, items=["买牛奶", "写周报"])
     second = _invoke(tools.todo_meta_get)
     assert second["meta"]["count"] == 2
-    assert second["meta"]["created_at"] == first["meta"]["created_at"]
+    assert second["meta"]["updated_at"] == first["meta"]["updated_at"]
 
 
-def test_todo_meta_stamp_changes_created_at(plugin_data_dir) -> None:
-    """todo_meta_stamp 会刷新 created_at 与 count。"""
+def test_todo_meta_stamp_changes_updated_at(plugin_data_dir) -> None:
+    """todo_meta_stamp 会刷新 updated_at 与 count。"""
     _invoke(tools.todo_save, items=["买牛奶"])
-    before = _invoke(tools.todo_meta_get)["meta"]["created_at"]
+    before = _invoke(tools.todo_meta_get)["meta"]["updated_at"]
 
     stamped = _invoke(tools.todo_meta_stamp)
     assert stamped["success"] is True
     assert stamped["meta"]["count"] == 1
-    assert stamped["meta"]["created_at"] != before
+    assert stamped["meta"]["updated_at"] != before
     assert stamped["meta"]["date"] == datetime.now(CST).strftime("%Y-%m-%d")
 
 

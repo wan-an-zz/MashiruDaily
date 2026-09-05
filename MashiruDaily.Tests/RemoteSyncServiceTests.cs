@@ -92,13 +92,13 @@ public sealed class ThrowingHttpMessageHandler : HttpMessageHandler
 
 public class RemoteSyncServiceTests : IDisposable
 {
-    private const string ServerCreatedAt = "2026-08-10T17:00:00+08:00";
+    private const string ServerUpdatedAt = "2026-08-10T17:00:00+08:00";
 
-    private const string OlderCreatedAt = "2026-08-10T16:00:00+08:00";
+    private const string OlderUpdatedAt = "2026-08-10T16:00:00+08:00";
 
-    private const string LaterCreatedAt = "2026-08-10T18:00:00+08:00";
+    private const string LaterUpdatedAt = "2026-08-10T18:00:00+08:00";
 
-    private const string ServerCreatedAtNormalized = "2026-08-10T17:00:00.0000000+08:00";
+    private const string ServerUpdatedAtNormalized = "2026-08-10T17:00:00.0000000+08:00";
 
     private readonly string _dir;
 
@@ -140,15 +140,15 @@ public class RemoteSyncServiceTests : IDisposable
         ServerBaseUrl = "http://server.test:8123",
         MaxRetryAttempts = 0,
         TimeoutSeconds = 5,
-        LastSyncedAt = ServerCreatedAt,
+        LastSyncedAt = ServerUpdatedAt,
     };
 
     private static FakeHttpMessageHandler CreateMetaHandler(
-        string? metaCreatedAt = null,
+        string? metaUpdatedAt = null,
         Func<HttpRequestMessage, HttpResponseMessage>? postResponder = null,
         string? todoJson = null)
     {
-        var createdAt = metaCreatedAt ?? ServerCreatedAt;
+        var updatedAt = metaUpdatedAt ?? ServerUpdatedAt;
         return new FakeHttpMessageHandler(request =>
         {
             if (request.Method == HttpMethod.Post)
@@ -156,7 +156,7 @@ public class RemoteSyncServiceTests : IDisposable
 
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"))
                 return JsonResponse(HttpStatusCode.OK,
-                    $"{{\"date\":\"2026-08-10\",\"created_at\":\"{createdAt}\"}}");
+                    $"{{\"date\":\"2026-08-10\",\"updated_at\":\"{updatedAt}\"}}");
 
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo"))
                 return JsonResponse(HttpStatusCode.OK, todoJson ?? "[]");
@@ -234,6 +234,8 @@ public class RemoteSyncServiceTests : IDisposable
         var root = doc.RootElement;
         Assert.Equal(JsonValueKind.Object, root.ValueKind);
         Assert.Equal("update", root.GetProperty("event_type").GetString());
+        Assert.True(root.TryGetProperty("updated_at", out var updatedAt));
+        Assert.False(string.IsNullOrWhiteSpace(updatedAt.GetString()));
 
         var events = root.GetProperty("events");
         Assert.Equal(expectedEventTypes.Length, events.GetArrayLength());
@@ -268,12 +270,12 @@ public class RemoteSyncServiceTests : IDisposable
     {
         var local = new TodoItem { Title = "local", HasSynced = true };
         var settings = SyncSettings();
-        settings.LastSyncedAt = OlderCreatedAt;
+        settings.LastSyncedAt = OlderUpdatedAt;
 
         var todoJson = "[{\"id\":\"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\"," +
                        "\"title\":\"Pulled\",\"is_completed\":false," +
                        "\"created_at\":\"2026-08-10T18:00:00+08:00\",\"completed_at\":null}]";
-        var handler = CreateMetaHandler(LaterCreatedAt, todoJson: todoJson);
+        var handler = CreateMetaHandler(LaterUpdatedAt, todoJson: todoJson);
         var harness = await CreateHarnessAsync(handler, settings, local);
         var (todoService, settingsRepo, syncService, _) = harness;
 
@@ -295,7 +297,7 @@ public class RemoteSyncServiceTests : IDisposable
         var local = new TodoItem { Title = "pending", HasSynced = false };
         var handler = CreateMetaHandler();
         var harness = await CreateHarnessAsync(handler, SyncSettings(), local);
-        var (todoService, _, syncService, _) = harness;
+        var (todoService, settingsRepo, syncService, _) = harness;
 
         await syncService.InitializeAsync();
 
@@ -310,6 +312,11 @@ public class RemoteSyncServiceTests : IDisposable
         Assert.False(payload.GetProperty("is_completed").GetBoolean());
 
         Assert.True(todoService.Items.Single().HasSynced);
+
+        // 服务端会用本次 updated_at 刷新 todo-meta.json，客户端同步推进 LastSyncedAt。
+        var pushedUpdatedAt = doc.RootElement.GetProperty("updated_at").GetString();
+        var reloaded = await settingsRepo.LoadAsync();
+        Assert.Equal(pushedUpdatedAt, reloaded.LastSyncedAt);
     }
 
     [Fact]
@@ -371,22 +378,28 @@ public class RemoteSyncServiceTests : IDisposable
             }
 
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"))
-                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"created_at\":\"{ServerCreatedAt}\"}}");
+                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"updated_at\":\"{ServerUpdatedAt}\"}}");
             return new HttpResponseMessage(HttpStatusCode.NotFound);
         });
 
         var harness = await CreateHarnessAsync(handler, settings,
             new TodoItem { Id = okId, Title = "ok", HasSynced = false },
             new TodoItem { Id = errorId, Title = "err", HasSynced = false });
-        var (todoService, _, syncService, _) = harness;
+        var (todoService, settingsRepo, syncService, _) = harness;
 
         await syncService.InitializeAsync();
 
-        Assert.Equal(1, handler.Requests.Count(r => r.Method == HttpMethod.Post));
+        var post = Assert.Single(handler.Requests, r => r.Method == HttpMethod.Post);
         Assert.Equal(SyncStatus.Error, syncService.Status);
         Assert.True(todoService.Items.Single(x => x.Id == okId).HasSynced);
         Assert.False(todoService.Items.Single(x => x.Id == errorId).HasSynced);
         Assert.Equal(1, syncService.PendingSyncCount);
+
+        // 部分成功时服务端会为成功部分刷新 updated_at，客户端也推进 LastSyncedAt。
+        using var doc = JsonDocument.Parse(post.Body!);
+        var pushedUpdatedAt = doc.RootElement.GetProperty("updated_at").GetString();
+        var reloaded = await settingsRepo.LoadAsync();
+        Assert.Equal(pushedUpdatedAt, reloaded.LastSyncedAt);
     }
 
     [Fact]
@@ -400,7 +413,7 @@ public class RemoteSyncServiceTests : IDisposable
             if (request.Method == HttpMethod.Post)
                 throw new HttpRequestException("connection refused");
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"))
-                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"created_at\":\"{ServerCreatedAt}\"}}");
+                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"updated_at\":\"{ServerUpdatedAt}\"}}");
             return new HttpResponseMessage(HttpStatusCode.NotFound);
         });
 
@@ -430,7 +443,7 @@ public class RemoteSyncServiceTests : IDisposable
             if (request.Method == HttpMethod.Post)
                 return JsonResponse(HttpStatusCode.BadRequest, "{\"success\":false}");
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"))
-                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"created_at\":\"{ServerCreatedAt}\"}}");
+                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"updated_at\":\"{ServerUpdatedAt}\"}}");
             return new HttpResponseMessage(HttpStatusCode.NotFound);
         });
 
@@ -469,7 +482,7 @@ public class RemoteSyncServiceTests : IDisposable
             }
 
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"))
-                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"created_at\":\"{ServerCreatedAt}\"}}");
+                return JsonResponse(HttpStatusCode.OK, $"{{\"date\":\"2026-08-10\",\"updated_at\":\"{ServerUpdatedAt}\"}}");
             return new HttpResponseMessage(HttpStatusCode.NotFound);
         });
 
@@ -531,7 +544,7 @@ public class RemoteSyncServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task InitializeAsync_MissingCreatedAt_MetaError_NoHttpMutation()
+    public async Task InitializeAsync_MissingUpdatedAt_MetaError_NoHttpMutation()
     {
         var handler = new FakeHttpMessageHandler(request =>
         {
@@ -550,7 +563,7 @@ public class RemoteSyncServiceTests : IDisposable
         await syncService.InitializeAsync();
 
         Assert.Equal(SyncStatus.Error, syncService.Status);
-        Assert.Contains("created_at", syncService.LastError);
+        Assert.Contains("updated_at", syncService.LastError);
         Assert.DoesNotContain(handler.Requests, r => r.Method == HttpMethod.Post);
         Assert.DoesNotContain(handler.Requests, r => r.Uri.AbsolutePath.EndsWith("/api/todo"));
     }
@@ -587,7 +600,7 @@ public class RemoteSyncServiceTests : IDisposable
 
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"))
                 return JsonResponse(HttpStatusCode.OK,
-                    $"{{\"date\":\"2026-08-10\",\"created_at\":\"{ServerCreatedAt}\"}}");
+                    $"{{\"date\":\"2026-08-10\",\"updated_at\":\"{ServerUpdatedAt}\"}}");
 
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/messages"))
                 return JsonResponse(HttpStatusCode.OK,
@@ -658,7 +671,7 @@ public class RemoteSyncServiceTests : IDisposable
 
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"))
                 return JsonResponse(HttpStatusCode.OK,
-                    $"{{\"date\":\"2026-08-10\",\"created_at\":\"{ServerCreatedAt}\"}}");
+                    $"{{\"date\":\"2026-08-10\",\"updated_at\":\"{ServerUpdatedAt}\"}}");
 
             return new HttpResponseMessage(HttpStatusCode.NotFound);
         });
@@ -724,7 +737,7 @@ public class RemoteSyncServiceTests : IDisposable
 
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"))
                 return JsonResponse(HttpStatusCode.OK,
-                    $"{{\"date\":\"2026-08-10\",\"created_at\":\"{ServerCreatedAt}\"}}");
+                    $"{{\"date\":\"2026-08-10\",\"updated_at\":\"{ServerUpdatedAt}\"}}");
 
             return new HttpResponseMessage(HttpStatusCode.NotFound);
         });

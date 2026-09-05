@@ -70,7 +70,7 @@ def client(data_dir: Path):
 
 
 def test_meta_returns_valid_shape(client, data_dir) -> None:
-    """应返回 200：date 为 yyyy-MM-dd，created_at 为可解析的 ISO8601 UTC+8，count 为整数。"""
+    """应返回 200：date 为 yyyy-MM-dd，updated_at 为可解析的 ISO8601 UTC+8，count 为整数。"""
     # Given: 空数据目录（无 todo.json、无侧车）
 
     # When: 请求元数据
@@ -80,9 +80,9 @@ def test_meta_returns_valid_shape(client, data_dir) -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", body["date"])
-    assert body["created_at"].endswith("+08:00")
-    created_at = datetime.fromisoformat(body["created_at"])
-    assert created_at.tzinfo is not None
+    assert body["updated_at"].endswith("+08:00")
+    updated_at = datetime.fromisoformat(body["updated_at"])
+    assert updated_at.tzinfo is not None
     assert isinstance(body["count"], int)
 
 
@@ -190,25 +190,25 @@ def test_meta_sidecar_non_object_returns_json_500(client, data_dir) -> None:
     assert "detail" in resp.json()
 
 
-def test_created_at_survives_webhook_edit_but_stamp_changes_it(client, data_dir) -> None:
-    """客户端推送式编辑后 created_at 不变（count 增加）；todo_meta_stamp 运行后 created_at 改变。"""
+def test_updated_at_survives_external_edit_but_stamp_changes_it(client, data_dir) -> None:
+    """外部直接编辑 todo.json 后 updated_at 不变（count 增加）；todo_meta_stamp 运行后 updated_at 改变。"""
     # Given: 初始 todo.json 与侧车
     _atomic_write(
         data_dir / "todo.json",
         json.dumps([_item("1", "买牛奶")], ensure_ascii=False),
     )
     meta_before = client.get("/api/todo/meta").json()
-    created_before = meta_before["created_at"]
+    updated_before = meta_before["updated_at"]
 
-    # When: 模拟客户端推送式编辑（追加一条）后请求 meta
+    # When: 模拟外部直接编辑（追加一条）后请求 meta
     _atomic_write(
         data_dir / "todo.json",
         json.dumps([_item("1", "买牛奶"), _item("2", "写周报")], ensure_ascii=False),
     )
     meta_after_edit = client.get("/api/todo/meta").json()
 
-    # Then: created_at 不变，count 增加
-    assert meta_after_edit["created_at"] == created_before
+    # Then: updated_at 不变，count 增加
+    assert meta_after_edit["updated_at"] == updated_before
     assert meta_after_edit["count"] == meta_before["count"] + 1
 
     # When: 调用插件工具 todo_meta_stamp（MASHIRU_DATA_DIR 已由 fixture 指向临时目录）
@@ -219,9 +219,9 @@ def test_created_at_survives_webhook_edit_but_stamp_changes_it(client, data_dir)
     stamp_result = json.loads(todo_meta_stamp({}))
     assert stamp_result["success"] is True
 
-    # Then: created_at 已改变且为合法 UTC+8，date 为今日，count 匹配实时条数
+    # Then: updated_at 已改变且为合法 UTC+8，date 为今日，count 匹配实时条数
     meta_after_stamp = client.get("/api/todo/meta").json()
-    assert meta_after_stamp["created_at"] != created_before
+    assert meta_after_stamp["updated_at"] != updated_before
     assert meta_after_stamp["date"] == datetime.now(CST).strftime("%Y-%m-%d")
     assert meta_after_stamp["count"] == 2
 
@@ -261,9 +261,9 @@ def _update_envelope(event_type: str, item: _TodoFixture) -> dict:
     }
 
 
-def _update_body(*events: dict) -> dict:
-    """构造 POST /api/update 的请求体：顶层 event_type + events 数组。"""
-    return {"event_type": "update", "events": list(events)}
+def _update_body(*events: dict, updated_at: str = "2026-08-18T10:00:00+08:00") -> dict:
+    """构造 POST /api/update 的请求体：顶层 event_type + updated_at + events 数组。"""
+    return {"event_type": "update", "updated_at": updated_at, "events": list(events)}
 
 
 def test_update_upserts_todo_list(client, data_dir) -> None:
@@ -285,6 +285,11 @@ def test_update_upserts_todo_list(client, data_dir) -> None:
     assert body["success_ids"] == ["2"]
     assert body["error_ids"] == []
     assert client.get("/api/todo").json() == [_item("1", "买牛奶"), new_item]
+
+    # And: 服务端把请求体携带的 updated_at 写入 todo-meta.json
+    meta = client.get("/api/todo/meta").json()
+    assert meta["updated_at"] == "2026-08-18T10:00:00+08:00"
+    assert meta["count"] == 2
 
 
 def test_update_deletes_todo(client, data_dir) -> None:
@@ -329,6 +334,34 @@ def test_update_batch_mixed_upsert_and_delete(client, data_dir) -> None:
     assert body["success"] is True
     assert sorted(body["success_ids"]) == ["1", "3"]
     assert client.get("/api/todo").json() == [_item("2", "写周报"), new_item]
+
+
+def test_update_partial_success_updates_meta_updated_at(client, data_dir) -> None:
+    """批量中部分成功时应把请求体 updated_at 写入侧车，供客户端推进 LastSyncedAt。"""
+    # Given: 服务器已有 1 条待办
+    _atomic_write(
+        data_dir / "todo.json",
+        json.dumps([_item("1", "买牛奶")], ensure_ascii=False),
+    )
+
+    # When: 同一批新增 id=2（成功）与删除不存在的 id=999（失败）
+    resp = client.post(
+        "/api/update",
+        json=_update_body(
+            _update_envelope("todo_updated", _item("2", "写周报")),
+            _update_envelope("todo_deleted", _item("999", "幽灵")),
+        ),
+    )
+
+    # Then: 500 部分成功，但成功部分已写入侧车 updated_at
+    assert resp.status_code == 500
+    body = resp.json()
+    assert body["success"] is False
+    assert body["success_ids"] == ["2"]
+    assert body["error_ids"] == ["999"]
+    meta = client.get("/api/todo/meta").json()
+    assert meta["updated_at"] == "2026-08-18T10:00:00+08:00"
+    assert meta["count"] == 2
 
 
 def test_update_delete_missing_id_returns_500_error_ids(client, data_dir) -> None:

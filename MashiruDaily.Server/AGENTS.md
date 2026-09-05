@@ -24,7 +24,7 @@ pytest MashiruDaily.Server/tests -v     # 完全离线；无 pytest 配置，纯
 
 ## 纪律（违反 = 协议破坏或安全事故）
 
-- **`created_at` 只在 `todo_meta_stamp` 运行时改变**（仅两处：`setup_server.py` 首次引导、每日 cron 结束）。`/api/update` 推送驱动的 `todo.json` 修改**禁止**碰侧车，否则客户端每次同步都误判「需要拉取」。
+- **`todo-meta.json` 的 `updated_at` 维护**：Hermes 侧仅在 `todo_meta_stamp` 运行时刷新（`setup_server.py` 首次引导、每日 cron 结束）；`/api/update` 推送驱动 `todo.json` 修改时，服务端必须用请求体携带的 `updated_at` 刷新侧车；客户端成功推送后同步推进本地 `LastSyncedAt`，避免把自己的推送误判为需要拉取。
 - **`has_synced` 禁止出现**：`$HOME/.mashiru-daily/todos/todo.json` 不含它，工具校验拒绝写入，Schema 文档明令禁止。
 - **密钥纪律**：来自 `--secret` 或 `MASHIRU_WEBHOOK_SECRET`，禁硬编码/交互/进命令行/打印（打印前深拷贝 + 掩码 `***`）。`bootstrap.py` 经环境变量注入子进程。
 - **配置走环境变量**（`MASHIRU_DATA_DIR`/`MASHIRU_HOST`/`MASHIRU_PORT`/`HERMES_HOME`），默认数据目录为 `$HOME/.mashiru-daily/todos`（可用 `MASHIRU_DATA_DIR` 覆盖），路径**绝不用 `os.getcwd()`**（cron/systemd 启动时 cwd 不可信）。

@@ -180,15 +180,15 @@ def _verify(venv_py: Path) -> int:
             if not _wait_ready(base_url, proc):
                 return 1
 
-        # 校验元数据：响应必须为 dict 且含非空 created_at
+        # 校验元数据：响应必须为 dict 且含非空 updated_at
         try:
             with urllib.request.urlopen(f"{base_url}/api/todo/meta", timeout=5) as resp:
                 meta = json.loads(resp.read())
         except (urllib.error.URLError, TimeoutError, OSError, ValueError):
             print("[FAIL] /api/todo/meta 请求失败或返回非法 JSON。", file=sys.stderr)
             return 1
-        if not isinstance(meta, dict) or not meta.get("created_at"):
-            print("[FAIL] /api/todo/meta 响应非法：缺少非空 created_at。", file=sys.stderr)
+        if not isinstance(meta, dict) or not meta.get("updated_at"):
+            print("[FAIL] /api/todo/meta 响应非法：缺少非空 updated_at。", file=sys.stderr)
             return 1
 
         print("[OK] 启动验证通过：/health 200，/api/todo/meta 正常。")

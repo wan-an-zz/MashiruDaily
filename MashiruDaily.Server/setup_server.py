@@ -4,7 +4,7 @@
 1. 创建虚拟环境 .venv（已存在则跳过）；
 2. 用 .venv 的 pip 安装 requirements.txt；
 3. 创建 $HOME/.mashiru-daily/todos 数据目录；
-4. 调用 hermes_plugin 的 todo_meta_stamp 生成/刷新初始 sidecar（每次显式运行都会刷新 created_at，属预期行为）。
+4. 调用 hermes_plugin 的 todo_meta_stamp 生成/刷新初始 sidecar（每次显式运行都会刷新 updated_at，属预期行为）。
 
 仅依赖标准库：venv / subprocess / pathlib / argparse / os / sys / json。
 """

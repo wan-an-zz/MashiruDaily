@@ -26,7 +26,7 @@
 - **`HasSynced` 是本地字段，任何事件不得传输**（envelope 只序列化 id/title/is_completed/created_at/completed_at）。
 - **批量分发**：事件按批次 POST（≤15/批），429 退避 2s，`MaxRetryAttempts+1` 次后置 `Error`；**500 响应解析 `error_ids`/`success_ids`，只把成功的 id `MarkSyncedAsync`**（500 视为终态、不再重试，且只把成功条目用于 Hermes 反应链路）。队列入队/分发**调用方必须持有 `_gate`**；Hermes Webhook 后台 Worker 使用独立 `Channel`，不占用 `_gate`。
 - **`ServerBaseUrl` 陷阱**：推与拉都走 `ServerBaseUrl`（`POST /api/update` 与 `GET /api/todo*` 同基址 :8123）。默认空串，**无**「默认同 `HermesBaseUrl`」回退逻辑；`SyncEnabled` 时设置页 `SettingsPageViewModel.Validate()` 强制必填 —— 显式填 `http://<主机>:8123`。`HermesBaseUrl`/`WebhookRouteName` 现在被 Webhook 反应链路使用（触发 Hermes Agent），设置页连接测试也用 `HermesBaseUrl`。改拉取逻辑以代码为准，别照抄协议附录默认值。
-- **拉取决策**：`GET /api/todo/meta` 比对 `created_at`，服务器严格更新 → `ReplaceAllAsync` 整表覆盖并持久化 `LastSyncedAt`；否则推送 `HasSynced=false` 条目（`todo_updated` upsert）。
+- **拉取决策**：`GET /api/todo/meta` 比对 `updated_at`，服务器严格更新 → `ReplaceAllAsync` 整表覆盖并持久化 `LastSyncedAt`；否则推送 `HasSynced=false` 条目（`todo_updated` upsert）。客户端推送成功后也会用请求体的 `updated_at` 推进 `LastSyncedAt`，避免把自己的推送误判为需要拉取。
 - 签名：`HermesWebhookSigner` HMAC-SHA256 小写 hex，对 `"{timestamp}.{rawBody}"` 原始字节计算；头 `X-Webhook-Timestamp`/`X-Webhook-Signature-V2`/`X-Request-ID`。
 - **三把锁纪律**（并发正确性全靠它们）：`_gate`（SemaphoreSlim，串行化所有网络/排空路径）、`_stateLock`（快照与队列，**不得跨 await 持有**）、`_timerLock`（防抖定时器）。Hermes Webhook 后台 Worker 使用 `Channel` + `CancellationTokenSource` + `IDisposable` 独立管理，不混入 `_gate`。
 

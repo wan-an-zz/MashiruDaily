@@ -7,7 +7,7 @@
 - 只依赖 Python 标准库，便于 Hermes 进程直接加载；
 - 所有 handler 都返回 JSON 字符串，错误也以 JSON 返回，绝不向上抛异常；
 - 落盘沿用原子写（tmp + os.replace），避免半截文件；
-- todo-meta.json 的 created_at 只能由todo_meta_stamp 刷新。
+- todo-meta.json 的 updated_at 由 todo_meta_stamp 刷新，或由 /api/update 客户端推送携带的时间更新。
 """
 
 import json
@@ -113,12 +113,18 @@ def _load_or_init_meta() -> dict:
             data = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
             raise ValueError(f"todo-meta.json 解析失败（{path}）：{exc}") from exc
-        if not isinstance(data, dict) or not {"date", "created_at", "count"}.issubset(data):
-            raise ValueError(f"todo-meta.json 结构不合法（{path}）：需要 date/created_at/count 三键")
+        # 兼容旧版本 created_at 字段：读取时视为 updated_at，并立即落盘迁移为新字段。
+        if not isinstance(data, dict):
+            raise ValueError(f"todo-meta.json 结构不合法（{path}）：需要 date/updated_at/count 三键")
+        if "updated_at" not in data and "created_at" in data:
+            data["updated_at"] = data.pop("created_at")
+            _atomic_write_json(path, data)
+        if not {"date", "updated_at", "count"}.issubset(data):
+            raise ValueError(f"todo-meta.json 结构不合法（{path}）：需要 date/updated_at/count 三键")
         return data
     meta = {
         "date": _today_cst(),
-        "created_at": _now_cst_iso(),
+        "updated_at": _now_cst_iso(),
         "count": len(_load_todo_list()),
     }
     _atomic_write_json(path, meta)
@@ -126,20 +132,20 @@ def _load_or_init_meta() -> dict:
 
 
 def _current_meta() -> dict:
-    """返回当前元数据：date/created_at 透传侧车，count 实时取自 todo.json。"""
+    """返回当前元数据：date/updated_at 透传侧车，count 实时取自 todo.json。"""
     meta = _load_or_init_meta()
     return {
         "date": meta["date"],
-        "created_at": meta["created_at"],
+        "updated_at": meta["updated_at"],
         "count": len(_load_todo_list()),
     }
 
 
 def _stamp_meta() -> dict:
-    """刷新 todo-meta.json：date=今日、created_at=当前 UTC+8、count=实时条数。"""
+    """刷新 todo-meta.json：date=今日、updated_at=当前 UTC+8、count=实时条数。"""
     meta = {
         "date": _today_cst(),
-        "created_at": _now_cst_iso(),
+        "updated_at": _now_cst_iso(),
         "count": len(_load_todo_list()),
     }
     _atomic_write_json(_meta_path(), meta)
@@ -299,7 +305,7 @@ def todo_meta_get(args: dict, **kwargs) -> str:
 
 
 def todo_meta_stamp(args: dict, **kwargs) -> str:
-    """刷新数据目录下的 todo-meta.json 的 created_at 与 count。"""
+    """刷新数据目录下的 todo-meta.json 的 updated_at 与 count。"""
     try:
         return _ok({"success": True, "meta": _stamp_meta()})
     except Exception as exc:

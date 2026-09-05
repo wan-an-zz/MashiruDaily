@@ -22,7 +22,7 @@ namespace MashiruDaily.Core.Services;
 /// <summary>
 /// 远程同步后台任务。监听 <see cref="ITodoService"/> 的变更，
 /// 将变更作为批量事件推送到服务器 /api/update，并执行启动时
-/// 「先比对服务器创建时间，再决定拉取或推送」的流程。
+/// 「先比对服务器更新时间，再决定拉取或推送」的流程。
 /// 维护最近观测数据的值快照，用于在不动 <c>TodoService</c> 自身锁的情况下做差异对比。
 /// </summary>
 public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncService, IDisposable
@@ -51,15 +51,15 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
     private sealed record PendingEvent(TodoItem Snapshot, string Type);
 
     /// <summary>
-    /// 拉取决策：是否需要拉取，以及服务器todo.json 的创建时间（统一 UTC+8）。
+    /// 拉取决策：是否需要拉取，以及服务器todo.json 的更新时间（统一 UTC+8）。
     /// </summary>
-    private sealed record MetaResult(bool NeedPull, DateTimeOffset ServerCreatedAt);
+    private sealed record MetaResult(bool NeedPull, DateTimeOffset ServerUpdatedAt);
 
     private sealed class MetaDate
     {
         public string? Date { get; set; }
 
-        public string? CreatedAt { get; set; }
+        public string? UpdatedAt { get; set; }
     }
 
     private static readonly JsonSerializerOptions SnakeCaseOption = new()
@@ -184,7 +184,7 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
                     return;
                 if (meta.NeedPull)
                 {
-                    await PullTodoListAsync(meta.ServerCreatedAt);
+                    await PullTodoListAsync(meta.ServerUpdatedAt);
                     return;
                 }
 
@@ -254,13 +254,13 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
                 return;
             }
 
-            _logger.LogInformation("远程同步已启用：先比对服务器创建时间，再决定推拉。");
+            _logger.LogInformation("远程同步已启用：先比对服务器更新时间，再决定推拉。");
             var meta = await FetchMetaAsync();
             if (meta is null)
                 return;
             if (meta.NeedPull)
             {
-                await PullTodoListAsync(meta.ServerCreatedAt);
+                await PullTodoListAsync(meta.ServerUpdatedAt);
                 return;
             }
 
@@ -465,6 +465,7 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
         UpdateStatus(SyncStatus.Syncing, null);
 
         // 构建请求体 (更新待办和 Webhooks共用 )
+        var updatedAt = UtcTimeOffset.NowOffset.ToString("O", CultureInfo.InvariantCulture);
         var envelopes = new List<dynamic>();
         var types = new List<string>();
         var ids = new List<Guid>();
@@ -491,6 +492,7 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
         var body = new
         {
             eventType = "update",
+            updatedAt = updatedAt,
             events = envelopes,
         };
 
@@ -523,6 +525,12 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
                         items.Count,  (int)response.StatusCode, string.Join("\n;", types),  string.Join("\n;", ids));
                     await _todoService.MarkSyncedAsync(ids);
                     RefreshPendingSyncCount();
+
+                    // 服务端已用本次 updated_at 刷新 todo-meta.json；
+                    // 客户端同步推进 LastSyncedAt，避免把自己的推送误判为需要拉取。
+                    _settings.LastSyncedAt = updatedAt;
+                    await _settingsRepo.SaveAsync(_settings);
+
                     await EnqueueWebhookSnapshot(new WebhookSnapshot(
                         rawBody,
                         timestamp,
@@ -586,12 +594,22 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
 
                             await _todoService.MarkSyncedAsync(successes);
                             RefreshPendingSyncCount();
+
+                            // 服务端会为成功的部分用本次 updated_at 刷新 todo-meta.json；
+                            // 这里同步推进 LastSyncedAt，避免下次把自己的推送误判为需要拉取。
+                            if (successes.Count > 0)
+                            {
+                                _settings.LastSyncedAt = updatedAt;
+                                await _settingsRepo.SaveAsync(_settings);
+                            }
+
                             UpdateStatus(SyncStatus.Error, $"有{errorIds.Count}个todo推送错误");
 
                             // 将成功推送的todo重组为新的请求体，投递到后台 Webhook 队列
                             var webhookBody = new
                             {
                                 eventType = "update",
+                                updatedAt = updatedAt,
                                 events = successTodos,
                             };
                             var rawWebhookBody = JsonSerializer.Serialize(webhookBody, SnakeCaseOption);
@@ -835,11 +853,11 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
     }
 
     /// <summary>
-    /// 请求服务器元数据，并依据 <c>createdAt</c> 与本地 <see cref="RemoteServerSettings.LastSyncedAt"/>
+    /// 请求服务器元数据，并依据 <c>updatedAt</c> 与本地 <see cref="RemoteServerSettings.LastSyncedAt"/>
     /// 决定是否需要拉取。调用方必须持有 <see cref="_gate"/>。
     /// </summary>
     /// <returns>
-    /// 拉取决策与服务器todo.json 的创建时间；失败时置 <see cref="SyncStatus.Error"/> 并返回 null。
+    /// 拉取决策与服务器todo.json 的更新时间；失败时置 <see cref="SyncStatus.Error"/> 并返回 null。
     /// </returns>
     private async Task<MetaResult?> FetchMetaAsync()
     {
@@ -867,11 +885,11 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
             return null;
         }
 
-        if (meta?.CreatedAt is not { Length: > 0 } createdAt
-            || !DateTimeOffset.TryParse(createdAt, CultureInfo.InvariantCulture,
+        if (meta?.UpdatedAt is not { Length: > 0 } updatedAt
+            || !DateTimeOffset.TryParse(updatedAt, CultureInfo.InvariantCulture,
                 DateTimeStyles.AssumeUniversal, out var parsed))
         {
-            UpdateStatus(SyncStatus.Error, "元数据响应未包含有效的 created_at。");
+            UpdateStatus(SyncStatus.Error, "元数据响应未包含有效的 updated_at。");
             return null;
         }
 
@@ -897,10 +915,10 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
 
     /// <summary>
     /// 拉取服务器整列表并整体替换本地集合，最后持久化
-    /// <see cref="RemoteServerSettings.LastSyncedAt"/> 为服务器创建时间。
+    /// <see cref="RemoteServerSettings.LastSyncedAt"/> 为服务器更新时间。
     /// 调用方必须持有 <see cref="_gate"/>。
     /// </summary>
-    private async Task PullTodoListAsync(DateTimeOffset serverCreatedAt)
+    private async Task PullTodoListAsync(DateTimeOffset serverUpdatedAt)
     {
         var baseUrl = _settings.ServerBaseUrl.TrimEnd('/');
         var listUrl = $"{baseUrl}/api/todo";
@@ -945,22 +963,22 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
                 _snapshot[item.Id] = Copy(item);
         }
 
-        _settings.LastSyncedAt = serverCreatedAt.ToOffset(UtcTimeOffset.Offset).ToString("O", CultureInfo.InvariantCulture);
+        _settings.LastSyncedAt = serverUpdatedAt.ToOffset(UtcTimeOffset.Offset).ToString("O", CultureInfo.InvariantCulture);
         await _settingsRepo.SaveAsync(_settings);
 
-        _logger.LogInformation("已从服务器拉取 {Count} 条todo；上次同步时间更新为 {CreatedAt}。",
+        _logger.LogInformation("已从服务器拉取 {Count} 条todo；上次同步时间更新为 {UpdatedAt}。",
             pulled.Count, _settings.LastSyncedAt);
         UpdateStatus(SyncStatus.Success, null);
         RefreshPendingSyncCount();
     }
 
     /// <summary>
-    /// 服务器todo.json 创建时间不晚于上次同步时：仅推送本地待处理项。
+    /// 服务器todo.json 更新时间不晚于上次同步时：仅推送本地待处理项。
     /// 调用方必须持有 <see cref="_gate"/>。
     /// </summary>
     private async Task PushPendingOnlyAsync()
     {
-        _logger.LogInformation("服务器 todo.json 创建时间不晚于上次同步；推送本地todo。");
+        _logger.LogInformation("服务器 todo.json 更新时间不晚于上次同步；推送本地todo。");
         EnqueuePendingAsUpdated();
         await DispatchCoreAsync();
         if (PendingSyncCount == 0)

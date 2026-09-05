@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from json import loads
 
 from app.config import get_settings
-from app.funcs import current_meta, load_todo_list, current_messages
+from app.funcs import current_meta, load_todo_list, current_messages, update_meta_updated_at
 from hermes_plugin.mashiru_daily.tools import todo_upsert, todo_delete
 
 app = FastAPI()
@@ -31,6 +31,7 @@ class Item(BaseModel):
 class Items(BaseModel):
     '''update_todo_items接受的请求'''
     event_type: str
+    updated_at: str
     events: list[Item]
 
 class update_todo_msg(BaseModel):
@@ -48,7 +49,7 @@ async def _value_error_handler(request: Request, exc: ValueError) -> JSONRespons
 
 @app.get("/api/todo/meta")
 def get_meta() -> dict:
-    """返回元数据：date / created_at 透传侧车，count 取 todo.json 实时长度。"""
+    """返回元数据：date / updated_at 透传侧车，count 取 todo.json 实时长度。"""
     return current_meta()
 
 
@@ -98,6 +99,9 @@ async def update_todo_items(items: Items):
         else:
             return JSONResponse(status_code=500, content=update_todo_msg(success=False).model_dump())
 
+
+    if success_item_ids:
+        update_meta_updated_at(items.updated_at)
 
     if len(err_item_ids) == 0:
         return update_todo_msg(success=True, success_ids=success_item_ids).model_dump()

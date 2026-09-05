@@ -106,7 +106,7 @@ TODO_META_GET = {
 
 TODO_META_STAMP = {
     "name": "todo_meta_stamp",
-    "description": "刷新 todo-meta.json：更新 date 为今日、created_at 为当前 UTC+8、count 为实时条数。仅在每日例行维护结束时调用。",
+    "description": "刷新 todo-meta.json：更新 date 为今日、updated_at 为当前 UTC+8、count 为实时条数。仅在每日例行维护结束时调用。",
     "parameters": {
         "type": "object",
         "properties": {},

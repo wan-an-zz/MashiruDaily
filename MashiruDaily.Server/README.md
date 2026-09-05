@@ -38,7 +38,7 @@ Hermes Webhook 网关（:8644）
 ```
 $HOME/.mashiru-daily/todos/
 ├── todo.json                蛇形命名待办数组，服务器侧唯一数据源
-├── todo-meta.json           同步元数据：date / created_at / count
+├── todo-meta.json           同步元数据：date / updated_at / count
 └── backups/                 todo_save 覆盖前的备份
 ```
 
@@ -67,7 +67,7 @@ $HOME/.mashiru-daily/messages-to-user.json
 返回客户端拉取决策用的元数据：
 
 ```json
-{ "date": "2026-08-22", "created_at": "2026-08-22T08:00:00+08:00", "count": 12 }
+{ "date": "2026-08-22", "updated_at": "2026-08-22T08:00:00+08:00", "count": 12 }
 ```
 
 - `count` 始终是 `todo.json` 的实时条数。
@@ -108,6 +108,7 @@ $HOME/.mashiru-daily/messages-to-user.json
 ```json
 {
   "event_type": "update",
+  "updated_at": "2026-08-22T21:00:00+08:00",
   "events": [
     {
       "event_type": "todo_updated",
@@ -123,6 +124,8 @@ $HOME/.mashiru-daily/messages-to-user.json
   ]
 }
 ```
+
+- 顶层 `updated_at` 为客户端本次变更的 UTC+8 时间；有任一事件成功时，服务端会用它刷新 `todo-meta.json` 的 `updated_at`。
 
 服务端按 `events[].event_type` 调用 `todo_upsert` / `todo_delete` 直接修改 `todo.json`。
 
@@ -153,15 +156,15 @@ $HOME/.mashiru-daily/messages-to-user.json
 | `SyncEnabled` | `false` | 同步总开关 |
 | `MaxRetryAttempts` | `3` | 推送失败最大重试次数 |
 | `TimeoutSeconds` | `10` | HTTP 超时秒数 |
-| `LastSyncedAt` | 空 | 上次成功拉取时服务器 `created_at` |
+| `LastSyncedAt` | 空 | 上次成功拉取或推送后服务器 `updated_at` |
 
 `ServerBaseUrl` 必须显式填写 `http://<主机>:8123`，没有“默认等于 HermesBaseUrl”的回退。
 
-## 5. created_at 语义
+## 5. updated_at 语义
 
-- `todo-meta.json` 的 `created_at` 只在 `todo_meta_stamp` 运行时变化。
-- 运行时机：`setup_server.py` 首次引导、每日 Hermes cron 任务结束。
-- 客户端通过 `/api/update` 推送导致 `todo.json` 修改时，**禁止**更新 `created_at`，否则客户端会把每次推送误判为需要全量拉取。
+- `todo-meta.json` 的 `updated_at` 表示 `todo.json` 的上一次更新时间。
+- Hermes 侧在 `todo_meta_stamp` 运行时刷新：`setup_server.py` 首次引导、每日 Hermes cron 任务结束。
+- 客户端通过 `/api/update` 推送导致 `todo.json` 修改时，服务端使用请求体顶层的 `updated_at` 刷新该字段。
 
 ## 6. Hermes 插件工具
 
