@@ -1,3 +1,4 @@
+using MashiruDaily.Core.ViewModels;
 using MashiruDaily.Core.ViewModels.Todo;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
@@ -8,30 +9,43 @@ namespace MashiruDaily.Tui.Views;
 
 internal sealed class MainWindow : Runnable
 {
-    private readonly TodoPageViewModel _viewModel;
+    private readonly Label _todoNavLabel;
+
+    private readonly Label _talkNavLabel;
+
+    private readonly View _todoPage;
+
+    private readonly AgentReactionView _talkPage;
 
     private readonly TodoColumnView _pendingColumn;
 
     private readonly TodoColumnView _completedColumn;
 
-    public MainWindow(TodoPageViewModel viewModel)
+    private bool _showingTalk;
+
+    public MainWindow(TodoPageViewModel todoViewModel, TalkViewModel talkViewModel)
     {
-        _viewModel = viewModel;
         Title = "MashiruDaily - Todo";
 
         // --- 左侧边栏 --------------------------------------------------------
         View sidebar = new()
         {
-            Width = 16,
+            Width = 18,
             Height = Dim.Fill(),
         };
-        Label todoNav = new()
+        _todoNavLabel = new Label
         {
             Text = "▶ Todo List",
             X = 1,
             Y = 1,
         };
-        sidebar.Add(todoNav);
+        _talkNavLabel = new Label
+        {
+            Text = "  Agent ",
+            X = 1,
+            Y = 2,
+        };
+        sidebar.Add(_todoNavLabel, _talkNavLabel);
 
         // --- 右侧内容区 ------------------------------------------------------
         // CanFocus 必须为 true：否则会切断从根到列的焦点链，初始焦点落到
@@ -45,6 +59,14 @@ internal sealed class MainWindow : Runnable
             Height = Dim.Fill(),
         };
 
+        // --- 待办页面 --------------------------------------------------------
+        _todoPage = new View
+        {
+            CanFocus = true,
+            Width = Dim.Fill(),
+            Height = Dim.Fill(),
+        };
+
         Label title = new()
         {
             Text = "Todo",
@@ -52,7 +74,7 @@ internal sealed class MainWindow : Runnable
             Y = 1,
         };
 
-        _pendingColumn = new TodoColumnView("待完成", _viewModel.PendingTodos)
+        _pendingColumn = new TodoColumnView("待完成", todoViewModel.PendingTodos)
         {
             X = 1,
             Y = Pos.Bottom(title) + 1,
@@ -60,7 +82,7 @@ internal sealed class MainWindow : Runnable
             Height = Dim.Fill() - 3,
         };
 
-        _completedColumn = new TodoColumnView("已完成", _viewModel.CompletedTodos)
+        _completedColumn = new TodoColumnView("已完成", todoViewModel.CompletedTodos)
         {
             X = Pos.Right(_pendingColumn) + 2,
             Y = Pos.Bottom(title) + 1,
@@ -68,10 +90,30 @@ internal sealed class MainWindow : Runnable
             Height = Dim.Fill() - 3,
         };
 
-        content.Add(title, _pendingColumn, _completedColumn);
+        _todoPage.Add(title, _pendingColumn, _completedColumn);
+
+        // --- Agent 页面 -----------------------------------------------------
+        _talkPage = new AgentReactionView(talkViewModel)
+        {
+            Width = Dim.Fill(),
+            Height = Dim.Fill(),
+        };
+
+        content.Add(_todoPage, _talkPage);
+
+        // --- 键盘导航：Tab 在 待办 与 Agent 页面间循环切换 ----------------------
+        KeyDown += (_, e) =>
+        {
+            if (e == Key.Tab)
+            {
+                CyclePage();
+                e.Handled = true;
+            }
+        };
 
         // --- 状态栏（按键提示） ---------------------------------------------
         StatusBar status = new();
+        status.Add(new Shortcut(Key.Tab, "切换页面", CyclePage));
         status.Add(new Shortcut(Key.CursorUp, "选择", null));
         status.Add(new Shortcut(Key.CursorDown, "选择", null));
         status.Add(new Shortcut(Key.Space, "勾选", null));
@@ -80,7 +122,37 @@ internal sealed class MainWindow : Runnable
 
         Add(sidebar, content, status);
 
-        // 初始焦点放到待完成列，否则默认落在 StatusBar，列收不到按键。
+        // 初始显示待办页面，焦点放到待完成列。
+        ShowTodoPage();
+    }
+
+    private void ShowTodoPage()
+    {
+        _showingTalk = false;
+        Title = "MashiruDaily - Todo";
+        _todoPage.Visible = true;
+        _talkPage.Visible = false;
+        _todoNavLabel.Text = "▶ Todo List";
+        _talkNavLabel.Text = "  Agent ";
         _pendingColumn.SetFocus();
+    }
+
+    private void ShowTalkPage()
+    {
+        _showingTalk = true;
+        Title = "MashiruDaily - Agent";
+        _todoPage.Visible = false;
+        _talkPage.Visible = true;
+        _todoNavLabel.Text = "  Todo List";
+        _talkNavLabel.Text = "▶ Agent ";
+        _talkPage.FocusMessageView();
+    }
+
+    private void CyclePage()
+    {
+        if (_showingTalk)
+            ShowTodoPage();
+        else
+            ShowTalkPage();
     }
 }

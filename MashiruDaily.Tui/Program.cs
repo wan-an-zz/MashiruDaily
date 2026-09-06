@@ -1,8 +1,9 @@
 using MashiruDaily.Core.Abstracts;
 using MashiruDaily.Core.Logging;
 using MashiruDaily.Core.Services;
-using MashiruDaily.Tui.Views;
+using MashiruDaily.Core.ViewModels;
 using MashiruDaily.Core.ViewModels.Todo;
+using MashiruDaily.Tui.Views;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NLog.Extensions.Logging;
@@ -22,11 +23,13 @@ _ = SyncStartupAsync(sync, logger);
 
 var viewModel = services.GetRequiredService<TodoPageViewModel>();
 
+var talkViewModel = services.GetRequiredService<TalkViewModel>();
+
 IApplication app = Application.Create();
 app.Init();
 try
 {
-    app.Run(new MainWindow(viewModel));
+    app.Run(new MainWindow(viewModel, talkViewModel));
 }
 finally
 {
@@ -44,7 +47,8 @@ static ServiceProvider ConfigureServices()
     {
         builder.ClearProviders();
         builder.AddNLog();
-        LoggingConfigurator.Configure();
+        // 控制台已被 Terminal.Gui 占用，日志输出到 stdout 会覆盖 TUI，只保留文件日志。
+        LoggingConfigurator.Configure(consoleEnabled: false);
     });
 
     services.AddSingleton<HttpClient>();
@@ -53,6 +57,7 @@ static ServiceProvider ConfigureServices()
     services.AddSingleton<IRemoteServerSettingsRepository, RemoteServerSettingsService>();
     services.AddSingleton<IRemoteSyncService, RemoteSyncService>();
     services.AddSingleton<TodoPageViewModel>();
+    services.AddSingleton<TalkViewModel>();
 
     return services.BuildServiceProvider();
 }

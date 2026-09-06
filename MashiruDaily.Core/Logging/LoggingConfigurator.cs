@@ -12,14 +12,20 @@ namespace MashiruDaily.Core.Logging;
 /// </summary>
 public static class LoggingConfigurator
 {
-    public static void Configure()
+    /// <param name="consoleEnabled">
+    /// 是否输出到控制台。TUI 场景下传入 false。
+    /// </param>
+    public static void Configure(bool consoleEnabled = true)
     {
         var configuration = new LoggingConfiguration();
 
-        configuration.AddRuleForAllLevels(new ConsoleTarget("console")
+        if (consoleEnabled)
         {
-            Layout = "${longdate}|${level:uppercase=true}|${logger}|${message}${onexception:|${exception:format=tostring}}"
-        });
+            configuration.AddRuleForAllLevels(new ConsoleTarget("console")
+            {
+                Layout = "${longdate}|${level:uppercase=true}|${logger}|${message}${onexception:|${exception:format=tostring}}"
+            });
+        }
 
         var logDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
