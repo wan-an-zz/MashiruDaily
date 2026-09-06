@@ -1,6 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace MashiruDaily.ViewModels;
+namespace MashiruDaily.Core.ViewModels;
 
 public abstract class ViewModelBase : ObservableObject
 {

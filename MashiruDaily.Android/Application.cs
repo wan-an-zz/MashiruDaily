@@ -2,6 +2,7 @@
 using Android.Runtime;
 using Avalonia;
 using Avalonia.Android;
+using MashiruDaily.Assets;
 
 namespace MashiruDaily.Android
 {
@@ -15,7 +16,10 @@ namespace MashiruDaily.Android
         protected override AppBuilder CustomizeAppBuilder(AppBuilder builder)
         {
             return base.CustomizeAppBuilder(builder)
-            .WithInterFont();
+                // 选项必须在 ConfigureFonts 创建 FontManager 之前绑定。
+                .With(AppFonts.CreateFontManagerOptions())
+                .ConfigureFonts(fontManager => fontManager.AddFontCollection(new NotoSansSCFontCollection()))
+                .WithInterFont();
         }
     }
 }

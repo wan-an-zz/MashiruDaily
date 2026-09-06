@@ -1,0 +1,15 @@
+name: mashiru-daily
+version: 1.0.0
+description: MashiruDaily 数据工具插件：封装 todo.json、todo-meta.json 与 messages-to-user.json 的读写，供 Hermes 维护服务器端待办数据
+author: MashiruDaily
+license: MIT
+provides_tools:
+  - todo_list
+  - todo_get
+  - todo_save
+  - todo_upsert
+  - todo_completed
+  - todo_delete
+  - todo_meta_get
+  - todo_meta_stamp
+  - speak_to_user

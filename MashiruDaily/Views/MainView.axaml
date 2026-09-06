@@ -2,15 +2,44 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:assets="using:MashiruDaily.Assets"
+             xmlns:controls="using:MashiruDaily.Controls"
+             xmlns:models="using:MashiruDaily.Models"
+             xmlns:suki="https://github.com/kikipoulet/SukiUI"
              xmlns:vm="using:MashiruDaily.ViewModels"
-             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="800"
              x:Class="MashiruDaily.Views.MainView"
              x:DataType="vm:MainViewModel">
-  <Design.DataContext>
-    <!-- This only sets the DataContext for the previewer in an IDE,
-         to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
-    <vm:MainViewModel />
-  </Design.DataContext>
 
-  <TextBlock Text="{Binding Greeting}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    <Border Background="{DynamicResource SukiStrongBackground}">
+        <Grid RowDefinitions="*,Auto,Auto">
+
+            <!-- 页面内容：由 ViewLocator 解析，并使用 SukiUI 风格动画切换。 -->
+            <suki:SukiTransitioningContentControl Grid.Row="0"
+                                                  Content="{Binding ActiveItem.Page}" />
+
+            <controls:SyncStatusBar Grid.Row="1" />
+
+            <!-- SukiUI 风格的底部导航栏。 -->
+            <controls:BottomNavigationBar Grid.Row="2"
+                                          ItemsSource="{Binding NavigationItems}"
+                                          SelectedIndex="{Binding ActiveIndex, Mode=TwoWay}">
+                <controls:BottomNavigationBar.ItemTemplate>
+                    <DataTemplate x:DataType="models:NavigationItem">
+                        <StackPanel Spacing="3"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center">
+                            <PathIcon Data="{Binding Icon}"
+                                      Width="22" Height="22"
+                                      HorizontalAlignment="Center" />
+                            <TextBlock Text="{Binding Header}"
+                                       FontSize="11"
+                                       HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </DataTemplate>
+                </controls:BottomNavigationBar.ItemTemplate>
+            </controls:BottomNavigationBar>
+
+        </Grid>
+    </Border>
 </UserControl>

@@ -1,42 +1,147 @@
+using System;
+using System.Net.Http;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Data.Core;
-using Avalonia.Data.Core.Plugins;
-using System.Linq;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
+using MashiruDaily.Core.Abstracts;
+using MashiruDaily.Core.Logging;
+using MashiruDaily.Core.Services;
+using MashiruDaily.Core.ViewModels;
+using MashiruDaily.Core.ViewModels.Todo;
 using MashiruDaily.ViewModels;
 using MashiruDaily.Views;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using NLog.Extensions.Logging;
 
 namespace MashiruDaily;
 
 public partial class App : Application
 {
+    private bool _isDrainingShutdown;
+
+    /// <summary>根依赖注入容器。</summary>
+    public static IServiceProvider Services { get; private set; } = null!;
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
     }
 
-    public override void OnFrameworkInitializationCompleted()
+    public override async void OnFrameworkInitializationCompleted()
     {
+        Services = ConfigureServices();
+
+        var todoService = Services.GetRequiredService<ITodoService>();
+        await todoService.InitializeAsync();
+
+        var logger = Services.GetRequiredService<ILogger<App>>();
+
+        // 即发即忘的远程同步启动；绝不在启动时阻塞 UI 于网络请求。
+        _ = SyncStartupAsync(Services.GetRequiredService<IRemoteSyncService>(), logger);
+        logger.LogInformation("MashiruDaily 启动中（桌面={IsDesktop}）。",
+            ApplicationLifetime is IClassicDesktopStyleApplicationLifetime);
+
+        LogCjkFontResolution(logger);
+
+        var mainViewModel = Services.GetRequiredService<MainViewModel>();
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new MainWindow
-            {
-                DataContext = new MainViewModel()
-            };
+            desktop.ShutdownRequested += OnShutdownRequested;
+            desktop.MainWindow = new MainWindow { DataContext = mainViewModel };
         }
-        else if (ApplicationLifetime is IActivityApplicationLifetime singleViewFactoryApplicationLifetime)
+        else if (ApplicationLifetime is IActivityApplicationLifetime activityLifetime)
         {
-            singleViewFactoryApplicationLifetime.MainViewFactory = () => new MainView { DataContext = new MainViewModel() };
+            activityLifetime.MainViewFactory = () => new MainView { DataContext = mainViewModel };
         }
         else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewPlatform)
         {
-            singleViewPlatform.MainView = new MainView
-            {
-                DataContext = new MainViewModel()
-            };
+            singleViewPlatform.MainView = new MainView { DataContext = mainViewModel };
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private async void OnShutdownRequested(object? sender, ShutdownRequestedEventArgs e)
+    {
+        if (_isDrainingShutdown)
+            return;
+
+        _isDrainingShutdown = true;
+        e.Cancel = true;
+        var todoService = Services.GetRequiredService<ITodoService>();
+        await todoService.FlushAsync();
+
+        // 退出时尽力排空待处理的远程同步事件；绝不在关闭时阻塞。
+        try
+        {
+            await Services.GetRequiredService<IRemoteSyncService>().FlushAsync();
+        }
+        catch (Exception ex)
+        {
+            Services.GetRequiredService<ILogger<App>>()
+                .LogError(ex, "关闭时的远程同步冲刷失败。");
+        }
+
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+            desktop.Shutdown();
+    }
+
+    private static async Task SyncStartupAsync(IRemoteSyncService sync, ILogger logger)
+    {
+        try
+        {
+            await sync.InitializeAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "远程同步初始化失败。");
+        }
+    }
+
+    private static void LogCjkFontResolution(ILogger logger)
+    {
+        // 诊断：报告实际提供 CJK 字形的是哪个字体。'待' = U+5F85。
+        if (FontManager.Current.TryMatchCharacter(
+                '待', FontStyle.Normal, FontWeight.Normal, FontStretch.Normal,
+                FontFamily.Default, null, out var typeface))
+        {
+            logger.LogInformation("CJK 字形 '待' 由字体 '{Font}' 提供。", typeface.FontFamily.Name);
+        }
+        else
+        {
+            logger.LogWarning("CJK 字形 '待' 未能由任何字体提供。");
+        }
+    }
+
+    private static IServiceProvider ConfigureServices()
+    {
+        var services = new ServiceCollection();
+
+        services.AddLogging(builder =>
+        {
+            builder.ClearProviders();
+            builder.AddNLog();
+            LoggingConfigurator.Configure();
+        });
+
+        // 领域 / 基础设施
+        services.AddSingleton<ITodoRepositoryService, TodoRepoService>();
+        services.AddSingleton<ITodoService, TodoService>();
+
+        // 远程同步
+        services.AddSingleton<HttpClient>();
+        services.AddSingleton<IRemoteServerSettingsRepository, RemoteServerSettingsService>();
+        services.AddSingleton<IRemoteSyncService, RemoteSyncService>();
+
+        // 视图模型
+        services.AddSingleton<TodoPageViewModel>();
+        services.AddSingleton<SettingsPageViewModel>();
+        services.AddSingleton<MainViewModel>();
+        services.AddSingleton<TalkViewModel>();
+
+        return services.BuildServiceProvider();
     }
 }

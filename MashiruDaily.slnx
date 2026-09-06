@@ -3,9 +3,12 @@
     <Deploy />
   </Project>
   <Project Path="MashiruDaily.Browser/MashiruDaily.Browser.csproj" />
+  <Project Path="MashiruDaily.Core/MashiruDaily.Core.csproj" />
   <Project Path="MashiruDaily.Desktop/MashiruDaily.Desktop.csproj" />
   <Project Path="MashiruDaily.iOS/MashiruDaily.iOS.csproj">
     <Deploy />
   </Project>
   <Project Path="MashiruDaily/MashiruDaily.csproj" />
+  <Project Path="MashiruDaily.Tests/MashiruDaily.Tests.csproj"/>
+  <Project Path="MashiruDaily.Tui/MashiruDaily.Tui.csproj" />
 </Solution>

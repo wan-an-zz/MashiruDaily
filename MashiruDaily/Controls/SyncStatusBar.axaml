@@ -1,0 +1,64 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:assets="using:MashiruDaily.Assets"
+             xmlns:controls="using:MashiruDaily.Controls"
+             xmlns:vm="using:MashiruDaily.ViewModels"
+             x:Class="MashiruDaily.Controls.SyncStatusBar"
+             x:DataType="vm:MainViewModel"
+             Height="32"
+             HorizontalContentAlignment="Stretch">
+    <UserControl.Resources>
+        <controls:PositiveIntToBoolConverter x:Key="PositiveIntToBoolConverter" />
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <Style Selector="TextBlock.sync-status">
+            <Setter Property="Foreground" Value="{DynamicResource SukiText}" />
+        </Style>
+        <Style Selector="TextBlock.sync-status.sync-error">
+            <Setter Property="Foreground" Value="{DynamicResource SukiDangerColor}" />
+        </Style>
+    </UserControl.Styles>
+
+    <Border Background="{DynamicResource SukiCardBackground}"
+            BorderBrush="{DynamicResource SukiMediumBorderBrush}"
+            BorderThickness="0,1,0,0"
+            Padding="18,0">
+        <Grid ColumnDefinitions="Auto,Auto,*,Auto"
+              ColumnSpacing="10"
+              VerticalAlignment="Center">
+            <Ellipse Width="7"
+                     Height="7"
+                     Fill="{DynamicResource SukiSuccessColor}"
+                     VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1"
+                       Classes="sync-status"
+                       Classes.sync-error="{Binding HasSyncError}"
+                       Text="{Binding SyncStatusText}"
+                       FontSize="12"
+                       VerticalAlignment="Center" />
+            <Border Grid.Column="2"
+                    Background="{DynamicResource SukiPrimaryColor}"
+                    CornerRadius="8"
+                    Padding="7,2"
+                    HorizontalAlignment="Left"
+                    IsVisible="{Binding PendingSyncCount, Converter={StaticResource PositiveIntToBoolConverter}}">
+                <TextBlock Foreground="White"
+                           FontSize="11"
+                           Text="{Binding PendingSyncCount, StringFormat='待同步 {0}'}" />
+            </Border>
+            <Button Grid.Column="3"
+                    Classes="Icon Void"
+                    Command="{Binding SyncNowCommand}"
+                    ToolTip.Tip="立即同步"
+                    Width="28"
+                    Height="28"
+                    Padding="6"
+                    Foreground="{DynamicResource SukiPrimaryColor}">
+                <PathIcon Data="{x:Static assets:AppIcons.Refresh}"
+                          Width="16"
+                          Height="16" />
+            </Button>
+        </Grid>
+    </Border>
+</UserControl>

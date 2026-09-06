@@ -1,0 +1,219 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:suki="https://github.com/kikipoulet/SukiUI"
+             xmlns:assets="using:MashiruDaily.Assets"
+             xmlns:vm="using:MashiruDaily.Core.ViewModels.Todo"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="MashiruDaily.Views.Todo.TodoPageView"
+             x:DataType="vm:TodoPageViewModel">
+
+    <UserControl.Styles>
+        <Style Selector="TextBlock.todo-done">
+            <Setter Property="TextDecorations" Value="Strikethrough" />
+            <Setter Property="Foreground" Value="{DynamicResource SukiMuteText}" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="Auto,Auto,*">
+
+        <TextBlock Grid.Row="0"
+                   Margin="24,24,24,4"
+                   FontSize="28"
+                   FontWeight="Bold"
+                   Foreground="{DynamicResource SukiText}"
+                   Text="Todo" />
+
+        <Grid Grid.Row="1"
+              Margin="24,8,24,16"
+              ColumnDefinitions="*,Auto"
+              ColumnSpacing="12">
+            <TextBox Text="{Binding NewTodoTitle}"
+                     PlaceholderText="输入待办事项..."
+                     VerticalContentAlignment="Center">
+                <TextBox.KeyBindings>
+                    <KeyBinding Gesture="Enter" Command="{Binding AddCommand}" />
+                </TextBox.KeyBindings>
+            </TextBox>
+            <Button Grid.Column="1"
+                    Command="{Binding AddCommand}"
+                    Classes="Flat">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Data="{x:Static assets:AppIcons.Plus}"
+                              Width="14" Height="14"
+                              Foreground="White" />
+                    <TextBlock Text="添加" Foreground="White" />
+                </StackPanel>
+            </Button>
+        </Grid>
+        <Grid ColumnDefinitions="*, *" Grid.Row="2" Margin="24,0,24,24">
+                
+            <!-- 待完成 (Pending) -->
+            <suki:GlassCard Grid.Column="0" Margin="0,0,20,0">
+                <Grid RowDefinitions="Auto,*">
+                    <TextBlock Grid.Row="0"
+                               Text="{Binding PendingCount, StringFormat='待完成 ({0})'}"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource SukiPrimaryColor}" />
+                    <ScrollViewer Grid.Row="1" Margin="0,10,0,0">
+                        <ItemsControl ItemsSource="{Binding PendingTodos}">
+                            
+                            <ItemsControl.ItemTemplate>
+                                
+                                <DataTemplate x:DataType="vm:TodoItemViewModel">
+                                    <Border Margin="0,4"
+                                            Padding="14,10"
+                                            Background="{DynamicResource SukiCardBackground}"
+                                            BorderBrush="{DynamicResource SukiLightBorderBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="12">
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <CheckBox Grid.Column="0"
+                                                      VerticalAlignment="Center"
+                                                      IsChecked="{Binding IsCompleted}"
+                                                      Command="{Binding ToggleCommand}" />
+                                            <StackPanel Grid.Column="1"
+                                                        Margin="12,0"
+                                                        VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Title}"
+                                                           FontSize="15"
+                                                           TextWrapping="Wrap"
+                                                           Classes.todo-done="{Binding IsCompleted}"
+                                                           IsVisible="{Binding !IsEditing}" />
+                                                <TextBox Text="{Binding EditText}"
+                                                         FontSize="15"
+                                                         IsVisible="{Binding IsEditing}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2"
+                                                        Orientation="Horizontal"
+                                                        Spacing="2"
+                                                        VerticalAlignment="Center">
+                                                <Button Classes="Icon Void"
+                                                        IsVisible="{Binding IsEditing}"
+                                                        Command="{Binding SaveEditCommand}"
+                                                        ToolTip.Tip="保存"
+                                                        Foreground="{DynamicResource SukiSuccessColor}">
+                                                    <PathIcon Data="{x:Static assets:AppIcons.Check}"
+                                                              Width="16" Height="16" />
+                                                </Button>
+                                                <Button Classes="Icon Void"
+                                                        IsVisible="{Binding IsEditing}"
+                                                        Command="{Binding CancelEditCommand}"
+                                                        ToolTip.Tip="取消"
+                                                        Foreground="{DynamicResource SukiLowText}">
+                                                    <PathIcon Data="{x:Static assets:AppIcons.Close}"
+                                                              Width="16" Height="16" />
+                                                </Button>
+                                                <Button Classes="Icon Void"
+                                                        IsVisible="{Binding !IsEditing}"
+                                                        Command="{Binding BeginEditCommand}"
+                                                        ToolTip.Tip="修改"
+                                                        Foreground="{DynamicResource SukiLowText}">
+                                                    <PathIcon Data="{x:Static assets:AppIcons.Pencil}"
+                                                              Width="16" Height="16" />
+                                                </Button>
+                                                <Button Classes="Icon Void"
+                                                        IsVisible="{Binding !IsEditing}"
+                                                        Command="{Binding DeleteCommand}"
+                                                        ToolTip.Tip="删除"
+                                                        Foreground="{DynamicResource SukiDangerColor}">
+                                                    <PathIcon Data="{x:Static assets:AppIcons.Trash}"
+                                                              Width="16" Height="16" />
+                                                </Button>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                                
+                            </ItemsControl.ItemTemplate>
+                            
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </suki:GlassCard>
+
+            <suki:GlassCard Grid.Column="1">
+                <!-- 已完成 (Completed) -->
+                <Grid RowDefinitions="Auto,*">
+                    <TextBlock Grid.Row="0"
+                               Text="{Binding CompletedCount, StringFormat='已完成 ({0})'}"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource SukiSuccessColor}" />
+                    <ScrollViewer Grid.Row="1" Margin="0,10,0,0">
+                        <ItemsControl ItemsSource="{Binding CompletedTodos}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:TodoItemViewModel">
+                                    <Border Margin="0,4"
+                                            Padding="14,10"
+                                            Background="{DynamicResource SukiCardBackground}"
+                                            BorderBrush="{DynamicResource SukiLightBorderBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="12">
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <CheckBox Grid.Column="0"
+                                                      VerticalAlignment="Center"
+                                                      IsChecked="{Binding IsCompleted}"
+                                                      Command="{Binding ToggleCommand}" />
+                                            <StackPanel Grid.Column="1"
+                                                        Margin="12,0"
+                                                        VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Title}"
+                                                           FontSize="15"
+                                                           TextWrapping="Wrap"
+                                                           Classes.todo-done="{Binding IsCompleted}"
+                                                           IsVisible="{Binding !IsEditing}" />
+                                                <TextBox Text="{Binding EditText}"
+                                                         FontSize="15"
+                                                         IsVisible="{Binding IsEditing}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2"
+                                                        Orientation="Horizontal"
+                                                        Spacing="2"
+                                                        VerticalAlignment="Center">
+                                                <Button Classes="Icon Void"
+                                                        IsVisible="{Binding IsEditing}"
+                                                        Command="{Binding SaveEditCommand}"
+                                                        ToolTip.Tip="保存"
+                                                        Foreground="{DynamicResource SukiSuccessColor}">
+                                                    <PathIcon Data="{x:Static assets:AppIcons.Check}"
+                                                              Width="16" Height="16" />
+                                                </Button>
+                                                <Button Classes="Icon Void"
+                                                        IsVisible="{Binding IsEditing}"
+                                                        Command="{Binding CancelEditCommand}"
+                                                        ToolTip.Tip="取消"
+                                                        Foreground="{DynamicResource SukiLowText}">
+                                                    <PathIcon Data="{x:Static assets:AppIcons.Close}"
+                                                              Width="16" Height="16" />
+                                                </Button>
+                                                <Button Classes="Icon Void"
+                                                        IsVisible="{Binding !IsEditing}"
+                                                        Command="{Binding BeginEditCommand}"
+                                                        ToolTip.Tip="修改"
+                                                        Foreground="{DynamicResource SukiLowText}">
+                                                    <PathIcon Data="{x:Static assets:AppIcons.Pencil}"
+                                                              Width="16" Height="16" />
+                                                </Button>
+                                                <Button Classes="Icon Void"
+                                                        IsVisible="{Binding !IsEditing}"
+                                                        Command="{Binding DeleteCommand}"
+                                                        ToolTip.Tip="删除"
+                                                        Foreground="{DynamicResource SukiDangerColor}">
+                                                    <PathIcon Data="{x:Static assets:AppIcons.Trash}"
+                                                              Width="16" Height="16" />
+                                                </Button>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </suki:GlassCard>
+        </Grid>
+    </Grid>
+</UserControl>

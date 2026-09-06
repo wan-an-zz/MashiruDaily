@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
         <Nullable>enable</Nullable>
@@ -19,5 +19,27 @@
             <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
         </PackageReference>
         <PackageReference Include="CommunityToolkit.Mvvm"/>
+        <PackageReference Include="SukiUI"/>
+        <PackageReference Include="CodeWF.Markdown"/>
+        <PackageReference Include="CodeWF.Markdown.Themes"/>
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection"/>
+        <PackageReference Include="Microsoft.Extensions.Logging"/>
+        <PackageReference Include="NLog"/>
+        <PackageReference Include="NLog.Extensions.Logging"/>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Update="Controls\BottomNavigationBar.axaml.cs">
+        <DependentUpon>BottomNavigationBar.axaml</DependentUpon>
+        <SubType>Code</SubType>
+      </Compile>
+      <Compile Update="Controls\BottomNavigationItem.axaml.cs">
+        <DependentUpon>BottomNavigationItem.axaml</DependentUpon>
+        <SubType>Code</SubType>
+      </Compile>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\MashiruDaily.Core\MashiruDaily.Core.csproj"/>
     </ItemGroup>
 </Project>

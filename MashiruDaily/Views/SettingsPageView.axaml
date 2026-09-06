@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:suki="https://github.com/kikipoulet/SukiUI"
+             xmlns:vm="using:MashiruDaily.Core.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="MashiruDaily.Views.SettingsPageView"
+             x:DataType="vm:SettingsPageViewModel">
+    <Grid RowDefinitions="Auto,*">
+        <TextBlock Grid.Row="0" Margin="24,24,24,16" FontSize="28" FontWeight="Bold"
+                   Foreground="{DynamicResource SukiText}" Text="设置" />
+        <ScrollViewer Grid.Row="1" Margin="24,0,24,24">
+            <suki:GlassCard Padding="20">
+                <StackPanel Spacing="14">
+                    <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
+                        <TextBlock VerticalAlignment="Center" Text="服务器地址" Foreground="{DynamicResource SukiLowText}" />
+                        <TextBox Grid.Column="1" Text="{Binding ServerBaseUrl}" />
+                        <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="Hermes 地址" Foreground="{DynamicResource SukiLowText}" />
+                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding HermesBaseUrl}" />
+                        <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="Webhook 路由" Foreground="{DynamicResource SukiLowText}" />
+                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding WebhookRouteName}" />
+                        <TextBlock Grid.Row="3" VerticalAlignment="Center" Text="Webhook 密钥" Foreground="{DynamicResource SukiLowText}" />
+                        <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding WebhookSecret}" PasswordChar="●" />
+                        <TextBlock Grid.Row="4" VerticalAlignment="Center" Text="最大重试次数" Foreground="{DynamicResource SukiLowText}" />
+                        <NumericUpDown Grid.Row="4" Grid.Column="1" Value="{Binding MaxRetryAttempts}" Minimum="1" Maximum="10" />
+                        <TextBlock Grid.Row="5" VerticalAlignment="Center" Text="超时秒数" Foreground="{DynamicResource SukiLowText}" />
+                        <NumericUpDown Grid.Row="5" Grid.Column="1" Value="{Binding TimeoutSeconds}" Minimum="1" Maximum="60" />
+                        <TextBlock Grid.Row="6" VerticalAlignment="Center" Text="启用同步" Foreground="{DynamicResource SukiLowText}" />
+                        <ToggleSwitch Grid.Row="6" Grid.Column="1" IsChecked="{Binding SyncEnabled}" />
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Command="{Binding SaveCommand}" Content="保存" />
+                        <Button Command="{Binding TestConnectionCommand}" Content="测试连接" />
+                        <Button Command="{Binding SyncNowCommand}" Content="立即同步" />
+                    </StackPanel>
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="{Binding InfoText}" Foreground="{DynamicResource SukiSuccessColor}" />
+                        <TextBlock Text="{Binding ErrorText}" Foreground="{DynamicResource SukiDangerColor}" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding TestResultText}" Foreground="{DynamicResource SukiSuccessColor}" />
+                        <TextBlock Text="{Binding SyncStatusText}" Foreground="{DynamicResource SukiText}" />
+                    </StackPanel>
+                </StackPanel>
+            </suki:GlassCard>
+        </ScrollViewer>
+    </Grid>
+</UserControl>
