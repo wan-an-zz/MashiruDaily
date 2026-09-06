@@ -25,11 +25,13 @@ var viewModel = services.GetRequiredService<TodoPageViewModel>();
 
 var talkViewModel = services.GetRequiredService<TalkViewModel>();
 
+var settingsViewModel = services.GetRequiredService<SettingsPageViewModel>();
+
 IApplication app = Application.Create();
 app.Init();
 try
 {
-    app.Run(new MainWindow(viewModel, talkViewModel));
+    app.Run(new MainWindow(viewModel, talkViewModel, settingsViewModel));
 }
 finally
 {
@@ -58,6 +60,7 @@ static ServiceProvider ConfigureServices()
     services.AddSingleton<IRemoteSyncService, RemoteSyncService>();
     services.AddSingleton<TodoPageViewModel>();
     services.AddSingleton<TalkViewModel>();
+    services.AddSingleton<SettingsPageViewModel>();
 
     return services.BuildServiceProvider();
 }

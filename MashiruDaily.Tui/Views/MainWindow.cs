@@ -13,9 +13,13 @@ internal sealed class MainWindow : Runnable
 
     private readonly Label _talkNavLabel;
 
+    private readonly Label _settingsNavLabel;
+
     private readonly View _todoPage;
 
     private readonly AgentReactionView _talkPage;
+
+    private readonly SettingsPageView _settingsPage;
 
     private readonly TodoColumnView _pendingColumn;
 
@@ -23,7 +27,12 @@ internal sealed class MainWindow : Runnable
 
     private bool _showingTalk;
 
-    public MainWindow(TodoPageViewModel todoViewModel, TalkViewModel talkViewModel)
+    private bool _showingSettings;
+
+    public MainWindow(
+        TodoPageViewModel todoViewModel,
+        TalkViewModel talkViewModel,
+        SettingsPageViewModel settingsViewModel)
     {
         Title = "MashiruDaily - Todo";
 
@@ -45,7 +54,13 @@ internal sealed class MainWindow : Runnable
             X = 1,
             Y = 2,
         };
-        sidebar.Add(_todoNavLabel, _talkNavLabel);
+        _settingsNavLabel = new Label
+        {
+            Text = "  设置",
+            X = 1,
+            Y = 3,
+        };
+        sidebar.Add(_todoNavLabel, _talkNavLabel, _settingsNavLabel);
 
         // --- 右侧内容区 ------------------------------------------------------
         // CanFocus 必须为 true：否则会切断从根到列的焦点链，初始焦点落到
@@ -99,9 +114,16 @@ internal sealed class MainWindow : Runnable
             Height = Dim.Fill(),
         };
 
-        content.Add(_todoPage, _talkPage);
+        // --- 设置页面 -----------------------------------------------------
+        _settingsPage = new SettingsPageView(settingsViewModel)
+        {
+            Width = Dim.Fill(),
+            Height = Dim.Fill(),
+        };
 
-        // --- 键盘导航：Tab 在 待办 与 Agent 页面间循环切换 ----------------------
+        content.Add(_todoPage, _talkPage, _settingsPage);
+
+        // --- 键盘导航：Tab 在 待办 / Agent / 设置 页面间循环切换 ---------------
         KeyDown += (_, e) =>
         {
             if (e == Key.Tab)
@@ -129,28 +151,50 @@ internal sealed class MainWindow : Runnable
     private void ShowTodoPage()
     {
         _showingTalk = false;
+        _showingSettings = false;
         Title = "MashiruDaily - Todo";
         _todoPage.Visible = true;
         _talkPage.Visible = false;
+        _settingsPage.Visible = false;
         _todoNavLabel.Text = "▶ Todo List";
         _talkNavLabel.Text = "  Agent ";
+        _settingsNavLabel.Text = "  设置";
         _pendingColumn.SetFocus();
     }
 
     private void ShowTalkPage()
     {
         _showingTalk = true;
+        _showingSettings = false;
         Title = "MashiruDaily - Agent";
         _todoPage.Visible = false;
         _talkPage.Visible = true;
+        _settingsPage.Visible = false;
         _todoNavLabel.Text = "  Todo List";
         _talkNavLabel.Text = "▶ Agent ";
+        _settingsNavLabel.Text = "  设置";
         _talkPage.FocusMessageView();
+    }
+
+    private void ShowSettingsPage()
+    {
+        _showingTalk = false;
+        _showingSettings = true;
+        Title = "MashiruDaily - 设置";
+        _todoPage.Visible = false;
+        _talkPage.Visible = false;
+        _settingsPage.Visible = true;
+        _todoNavLabel.Text = "  Todo List";
+        _talkNavLabel.Text = "  Agent ";
+        _settingsNavLabel.Text = "▶ 设置";
+        _settingsPage.SetFocus();
     }
 
     private void CyclePage()
     {
         if (_showingTalk)
+            ShowSettingsPage();
+        else if (_showingSettings)
             ShowTodoPage();
         else
             ShowTalkPage();

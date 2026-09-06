@@ -19,3 +19,4 @@ MashiruDaily.Server/MashiruDaily.Server检查清单.md
 MashiruDaily.Server/autostart.log
 .vscode/
 debug.log
+artifacts/

@@ -16,7 +16,7 @@
 | `Converters/` | `LocalDateTimeJsonConverter` | DateTime 统一按 UTC+8 墙钟时间序列化/反序列化 |
 | `Events/` | `GetMessageSuccessfulEventArgs` | 拉取到 Agent 消息时的事件参数 |
 | `Logging/` | `LoggingConfigurator` | NLog 纯代码配置，无 nlog.config |
-| `ViewModels/` | `ViewModelBase`、`Todo/TodoPageViewModel`+`TodoItemViewModel`、`TalkViewModel` | Todo 拆待完成/已完成两集合；Talk 展示 Agent 消息 |
+| `ViewModels/` | `ViewModelBase`、`Todo/TodoPageViewModel`+`TodoItemViewModel`、`TalkViewModel`、`SettingsPageViewModel` | Todo 拆待完成/已完成两集合；Talk 展示 Agent 消息；SettingsPage 为桌面/TUI 共用设置 VM（含保存、连接测试、立即同步） |
 
 ## 同步子系统（改代码前必读）
 

@@ -10,9 +10,10 @@ Guidance for AI coding agents (and humans) working in this project.
 
 ## 项目结构（本目录）
 
-- `Program.cs` — DI 装配（与 `MashiruDaily/App.axaml.cs` 同款 Core 注册：Todo 两件套 + 远程同步三件套 + HttpClient + `TodoPageViewModel` + `TalkViewModel`，**不含** Avalonia 专有的 `MainViewModel`/`SettingsPageViewModel`）+ 生命周期（`TodoService.InitializeAsync` → 即发即忘同步 → `Application.Create()/Init()/Run(MainWindow)` → Esc 退出冲刷）。
-- `Views/MainWindow.cs` — 根窗口；`TodoColumnView`（待完成/已完成双列）、`TodoRowView`（单行：勾选框 + 标题 + 删除按钮）、`AgentReactionView`（Agent 反应页）。`Tab` 键在 Todo 与 Agent 反应页面之间循环切换。
+- `Program.cs` — DI 装配（与 `MashiruDaily/App.axaml.cs` 同款 Core 注册：Todo 两件套 + 远程同步三件套 + HttpClient + `TodoPageViewModel` + `TalkViewModel` + `SettingsPageViewModel`，**不含** Avalonia 专有的 `MainViewModel`）+ 生命周期（`TodoService.InitializeAsync` → 即发即忘同步 → `Application.Create()/Init()/Run(MainWindow)` → Esc 退出冲刷）。
+- `Views/MainWindow.cs` — 根窗口；`TodoColumnView`（待完成/已完成双列）、`TodoRowView`（单行：勾选框 + 标题 + 删除按钮）、`AgentReactionView`（Agent 反应页）、`SettingsPageView`（设置页）。`Tab` 键在 Todo / Agent / 设置 页面之间循环切换。
 - `Views/AgentReactionView.cs` — Agent 反应页面：订阅 Core `TalkViewModel.AgentMessage`（与桌面端共享同一 `IRemoteSyncService` 数据来源），后台线程变更经 `App.Invoke` 回到主循环后刷新只读 `TextView`。
+- `Views/SettingsPageView.cs` — 设置页面：展示当前连接配置与状态，提供连接测试/立即同步；业务逻辑复用 Core `SettingsPageViewModel`。
 - 业务逻辑与 VM 全在 **`MashiruDaily.Core`**（`TodoPageViewModel`/`TodoItemViewModel` 直接消费，无 Avalonia 依赖）— 本目录只写视图与键盘路由，**别在 Tui 里复刻业务逻辑**。
 - `CLAUDE.md` 是指向本文件的桥接入口（同内容，不改逻辑）。
 

@@ -4,7 +4,7 @@
 
 ## 概览
 
-以 `MashiruDaily.Core.ViewModels` 为数据源，用 `ViewLocator` 反射把 VM 映射到本目录的 View；DI 在 `App.axaml.cs` 的 `ConfigureServices()` 装配（根容器暴露为 `App.Services`），TUI 的 `Program.cs` 用同样的 Core 注册（只是少了本目录的两个 VM）。
+以 `MashiruDaily.Core.ViewModels` 为数据源，用 `ViewLocator` 反射把 VM 映射到本目录的 View；DI 在 `App.axaml.cs` 的 `ConfigureServices()` 装配（根容器暴露为 `App.Services`），TUI 的 `Program.cs` 用同样的 Core 注册（只是少了本目录的 `MainViewModel`）。
 
 ## 目录
 
@@ -12,7 +12,7 @@
 |---|---|---|
 | `Views/` | `MainWindow.axaml*`（桌面 SukiWindow）、`MainView.axaml*`（单视图/移动）、`SettingsPageView.axaml*`、`Todo/TodoPageView.axaml*`、`TalkView.axaml*` | 全部 `UserControl`（除 MainWindow）；`ViewLocator` 按命名空间映射 |
 | `Controls/` | 平铺三件套：`BottomNavigationBar.axaml*`、`BottomNavigationItem.axaml*`、`SyncStatusBar.axaml*` | 自定义控件自带主题 `.axaml`，并入 `App.axaml` `Application.Resources` |
-| `ViewModels/` | `MainViewModel`、`SettingsPageViewModel` | Avalonia 侧 VM（Core 的 `TodoPageViewModel` 在 Core 里） |
+| `ViewModels/` | `MainViewModel` | Avalonia 侧 VM（Core 的 `TodoPageViewModel`、`SettingsPageViewModel` 在 Core 里） |
 | `Models/`+`Abstracts/` | `NavigationItem` + `INavigationItem` | 底部导航数据模型 |
 | `Assets/` | `AppIcons.cs`（`{x:Static}` 图标源）、`AppFonts.cs`/`NotoSansSCFontCollection.cs`、`Fonts/NotoSansSC-Regular.ttf` | 中文字体回退（Android tofu 修复） |
 
@@ -35,7 +35,7 @@
 ## DI（`App.axaml.cs` `ConfigureServices()`）
 
 - Core 全套：`ITodoRepositoryService→TodoRepoService`、`ITodoService→TodoService`、`HttpClient`、`IRemoteServerSettingsRepository→RemoteServerSettingsService`、`IRemoteSyncService→RemoteSyncService`（全 Singleton）。
-- 页面 VM：`TodoPageViewModel`（Core）、`SettingsPageViewModel`、`TalkViewModel`（Core）、`MainViewModel`（本目录）全 Singleton。
+- 页面 VM：`TodoPageViewModel`（Core）、`SettingsPageViewModel`（Core）、`TalkViewModel`（Core）、`MainViewModel`（本目录）全 Singleton。
 - 生命周期：桌面 → `MainWindow`；移动/单视图 → `MainView`。**启动同步即发即忘、关闭冲刷尽力而为**，绝不在 UI 线程阻塞于网络（`IRemoteSyncService.FlushAsync` 契约「绝不抛异常」）。
 - 新 VM 记得在此注册，且保持 `XxxViewModel`/`XxxView` 成对平行命名空间（见 ViewLocator 节）。
 

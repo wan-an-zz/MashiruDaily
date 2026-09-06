@@ -2,14 +2,12 @@ using System;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MashiruDaily.Core.Abstracts;
 using MashiruDaily.Core.Models;
-using MashiruDaily.Core.ViewModels;
 
-namespace MashiruDaily.ViewModels;
+namespace MashiruDaily.Core.ViewModels;
 
 public partial class SettingsPageViewModel : ViewModelBase
 {
@@ -18,6 +16,8 @@ public partial class SettingsPageViewModel : ViewModelBase
     private readonly IRemoteSyncService _syncService;
 
     private readonly HttpClient _httpClient;
+
+    private readonly SynchronizationContext? _uiContext;
 
     [ObservableProperty]
     private string _serverBaseUrl = string.Empty;
@@ -63,6 +63,7 @@ public partial class SettingsPageViewModel : ViewModelBase
         _settingsRepository = settingsRepository;
         _syncService = syncService;
         _httpClient = httpClient;
+        _uiContext = SynchronizationContext.Current;
         _ = LoadSettingsAsync();
         _syncService.StatusChanged += OnSyncStatusChanged;
         UpdateSyncStatus();
@@ -87,8 +88,7 @@ public partial class SettingsPageViewModel : ViewModelBase
         InfoText = null;
         if (ErrorText is not null)
             return;
-
-        // LastSyncedAt 是同步水位，不属于设置页可编辑字段；保存时从现有设置带出，避免覆盖。
+        
         var current = await _settingsRepository.LoadAsync();
         var settings = new RemoteServerSettings
         {
@@ -145,8 +145,16 @@ public partial class SettingsPageViewModel : ViewModelBase
     [RelayCommand]
     private Task SyncNow() => _syncService.SyncNowAsync();
 
-    private void OnSyncStatusChanged(object? sender, EventArgs e) =>
-        Dispatcher.UIThread.Post(UpdateSyncStatus);
+    private void OnSyncStatusChanged(object? sender, EventArgs e)
+    {
+        if (_uiContext is null || _uiContext == SynchronizationContext.Current)
+        {
+            UpdateSyncStatus();
+            return;
+        }
+
+        _uiContext.Post(_ => UpdateSyncStatus(), null);
+    }
 
     private void UpdateSyncStatus()
     {
