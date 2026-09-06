@@ -583,6 +583,61 @@ public class RemoteSyncServiceTests : IDisposable
         Assert.Empty(handler.Requests);
         Assert.Equal(SyncStatus.Idle, syncService.Status);
     }
+
+    [Fact]
+    public async Task ApplySettingsAsync_EnablingSyncAfterInit_TakesEffectImmediately()
+    {
+        var disabled = SyncSettings();
+        disabled.SyncEnabled = false;
+
+        var handler = CreateMetaHandler();
+        var harness = await CreateHarnessAsync(handler, disabled);
+        var (_, _, syncService, _) = harness;
+
+        await syncService.InitializeAsync();
+        Assert.Empty(handler.Requests);
+
+        await syncService.ApplySettingsAsync(SyncSettings());
+        await syncService.SyncNowAsync();
+
+        Assert.Contains(handler.Requests, r =>
+            r.Method == HttpMethod.Get && r.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"));
+    }
+
+    [Fact]
+    public async Task ApplySettingsAsync_ChangesServerBaseUrl_ForNextSync()
+    {
+        var handler = new FakeHttpMessageHandler(request =>
+        {
+            if (request.Method == HttpMethod.Post)
+                return OkPushResponse();
+
+            if (request.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"))
+                return JsonResponse(HttpStatusCode.OK,
+                    $"{{\"date\":\"2026-08-10\",\"updated_at\":\"{ServerUpdatedAt}\"}}");
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+        var harness = await CreateHarnessAsync(handler, SyncSettings());
+        var (todoService, _, syncService, _) = harness;
+
+        await syncService.InitializeAsync();
+
+        var changed = SyncSettings();
+        changed.ServerBaseUrl = "http://new-server.test:9999";
+        changed.LastSyncedAt = ServerUpdatedAt;
+        await syncService.ApplySettingsAsync(changed);
+
+        await todoService.AddAsync("After settings changed");
+        TriggerTick(syncService);
+        await WaitUntilAsync(() =>
+            handler.Requests.Any(r => r.Method == HttpMethod.Post && r.Uri!.AbsolutePath.EndsWith("/api/update")),
+            "应用新设置后未立即使用新的服务器地址同步。");
+
+        var post = handler.Requests.Last(r => r.Method == HttpMethod.Post && r.Uri!.AbsolutePath.EndsWith("/api/update"));
+        Assert.StartsWith("http://new-server.test:9999", post.Uri!.GetLeftPart(UriPartial.Authority));
+    }
+
     [Fact]
     public async Task WebhookReaction_AfterSuccess_PushesToHermesAndPollsServerMessages()
     {

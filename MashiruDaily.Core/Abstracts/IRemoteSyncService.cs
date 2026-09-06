@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using MashiruDaily.Core.Events;
+using MashiruDaily.Core.Models;
 
 namespace MashiruDaily.Core.Abstracts;
 
@@ -62,6 +63,13 @@ public interface IRemoteSyncService
     /// 手动同步：按当前 meta 决定拉取或推送。
     /// </summary>
     Task SyncNowAsync();
+
+    /// <summary>
+    /// 将用户可编辑的远程同步设置立即应用到运行中的同步服务（无需重启）。
+    /// 仅更新连接地址、密钥、开关、重试与超时等字段；内部 <see cref="RemoteServerSettings.LastSyncedAt"/>
+    /// 由同步服务维护，不会被本方法重置。
+    /// </summary>
+    Task ApplySettingsAsync(RemoteServerSettings settings);
 
     /// <summary>尽力推送待处理项，绝不抛异常。关闭时调用。</summary>
     Task FlushAsync();

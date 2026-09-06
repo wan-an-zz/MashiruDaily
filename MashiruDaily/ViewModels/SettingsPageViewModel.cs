@@ -88,7 +88,9 @@ public partial class SettingsPageViewModel : ViewModelBase
         if (ErrorText is not null)
             return;
 
-        await _settingsRepository.SaveAsync(new RemoteServerSettings
+        // LastSyncedAt 是同步水位，不属于设置页可编辑字段；保存时从现有设置带出，避免覆盖。
+        var current = await _settingsRepository.LoadAsync();
+        var settings = new RemoteServerSettings
         {
             ServerBaseUrl = ServerBaseUrl.Trim(),
             HermesBaseUrl = HermesBaseUrl.Trim(),
@@ -97,7 +99,11 @@ public partial class SettingsPageViewModel : ViewModelBase
             MaxRetryAttempts = MaxRetryAttempts,
             TimeoutSeconds = TimeoutSeconds,
             SyncEnabled = SyncEnabled,
-        });
+            LastSyncedAt = current.LastSyncedAt,
+        };
+
+        await _settingsRepository.SaveAsync(settings);
+        await _syncService.ApplySettingsAsync(settings);
         ErrorText = null;
         InfoText = "设置已保存";
     }

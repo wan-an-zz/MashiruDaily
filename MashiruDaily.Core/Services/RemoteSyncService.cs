@@ -203,6 +203,48 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
     }
 
     /// <inheritdoc />
+    public async Task ApplySettingsAsync(RemoteServerSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        await _gate.WaitAsync();
+        try
+        {
+            // LastSyncedAt 是同步服务内部推进的同步水位，不是用户在设置页编辑的字段；
+            // 保存设置时不能把它一起覆盖掉，否则会把“刚保存的配置”误判为需要全量拉取。
+            var lastSyncedAt = _settings.LastSyncedAt;
+            _settings = new RemoteServerSettings
+            {
+                ServerBaseUrl = settings.ServerBaseUrl,
+                HermesBaseUrl = settings.HermesBaseUrl,
+                WebhookRouteName = settings.WebhookRouteName,
+                WebhookSecret = settings.WebhookSecret,
+                SyncEnabled = settings.SyncEnabled,
+                MaxRetryAttempts = settings.MaxRetryAttempts,
+                TimeoutSeconds = settings.TimeoutSeconds,
+                LastSyncedAt = lastSyncedAt,
+            };
+
+            _httpClient.Timeout = TimeSpan.FromSeconds(Math.Max(1, _settings.TimeoutSeconds));
+
+            if (_initialized && !_settings.SyncEnabled)
+            {
+                lock (_timerLock)
+                {
+                    _timer?.Dispose();
+                    _timer = null;
+                }
+
+                UpdateStatus(SyncStatus.Idle, null);
+            }
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <inheritdoc />
     public async Task FlushAsync()
     {
         try
@@ -295,6 +337,10 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
     {
         _timer!.Dispose();
         _timer = null;
+
+        // 设置可能在定时器等待期间被关闭；关闭后不再产生新的同步分发。
+        if (!_settings.SyncEnabled)
+            return;
 
         if (DiffAndEnqueue() > 0)
         {
@@ -416,6 +462,9 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
     /// </summary>
     private async Task DispatchCoreAsync()
     {
+        if (!_settings.SyncEnabled)
+            return;
+
         while (true)
         {
             List<PendingEvent>? batch;

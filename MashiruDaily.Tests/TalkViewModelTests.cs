@@ -30,6 +30,9 @@ public class TalkViewModelTests
 
         public Task SyncNowAsync() => Task.CompletedTask;
 
+        public Task ApplySettingsAsync(MashiruDaily.Core.Models.RemoteServerSettings settings)
+            => Task.CompletedTask;
+
         public Task FlushAsync() => Task.CompletedTask;
 
         public void RaiseGetMessageSuccessful(string message)
