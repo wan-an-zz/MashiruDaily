@@ -17,8 +17,8 @@ from pathlib import Path
 
 import _config  # 本目录共享的 Hermes 配置工具
 
-# 默认 cron 表达式：每日 09:00
-DEFAULT_SCHEDULE = "0 9 * * *"
+# 默认 cron 表达式：每日 06:00
+DEFAULT_SCHEDULE = "0 6 * * *"
 
 
 def _run_cmd(cmd, timeout):
