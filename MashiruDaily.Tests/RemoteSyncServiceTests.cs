@@ -601,7 +601,7 @@ public class RemoteSyncServiceTests : IDisposable
         await syncService.SyncNowAsync();
 
         Assert.Contains(handler.Requests, r =>
-            r.Method == HttpMethod.Get && r.RequestUri!.AbsolutePath.EndsWith("/api/todo/meta"));
+            r.Method == HttpMethod.Get && r.Uri!.AbsolutePath.EndsWith("/api/todo/meta"));
     }
 
     [Fact]
@@ -636,6 +636,23 @@ public class RemoteSyncServiceTests : IDisposable
 
         var post = handler.Requests.Last(r => r.Method == HttpMethod.Post && r.Uri!.AbsolutePath.EndsWith("/api/update"));
         Assert.StartsWith("http://new-server.test:9999", post.Uri!.GetLeftPart(UriPartial.Authority));
+    }
+
+    [Fact]
+    public async Task ApplySettingsAsync_AfterRequestsStarted_DoesNotThrow()
+    {
+        var handler = CreateMetaHandler();
+        var harness = await CreateHarnessAsync(handler);
+        var (_, _, syncService, _) = harness;
+
+        await syncService.InitializeAsync();
+
+        var changed = SyncSettings();
+        changed.ServerBaseUrl = "http://new-server.test:9999";
+        changed.TimeoutSeconds = 20;
+
+        // HttpClient 在首次请求后不能再改 Timeout；这里确保“保存设置”不再因修改共享实例而崩溃。
+        await syncService.ApplySettingsAsync(changed);
     }
 
     [Fact]
