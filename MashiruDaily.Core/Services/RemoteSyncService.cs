@@ -225,8 +225,6 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
                 LastSyncedAt = lastSyncedAt,
             };
 
-            _httpClient.Timeout = TimeSpan.FromSeconds(Math.Max(1, _settings.TimeoutSeconds));
-
             if (_initialized && !_settings.SyncEnabled)
             {
                 lock (_timerLock)
@@ -270,6 +268,20 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
         }
     }
 
+    /// <summary>
+    /// 创建带当前“超时秒数”设置的请求取消源；外部取消令牌存在时联动取消。
+    /// </summary>
+    /// <param name="externalToken">调用方已有的取消令牌，可为 <see cref="CancellationToken.None"/>。</param>
+    private CancellationTokenSource CreateRequestTimeoutSource(CancellationToken externalToken = default)
+    {
+        var cts = externalToken == default
+            ? new CancellationTokenSource()
+            : CancellationTokenSource.CreateLinkedTokenSource(externalToken);
+
+        cts.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, _settings.TimeoutSeconds)));
+        return cts;
+    }
+
     private async Task InitializeCoreAsync()
     {
         if (_initialized)
@@ -278,7 +290,6 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
         try
         {
             _settings = await _settingsRepo.LoadAsync();
-            _httpClient.Timeout = TimeSpan.FromSeconds(Math.Max(1, _settings.TimeoutSeconds));
 
             lock (_stateLock)
             {
@@ -560,13 +571,15 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
         {
             try
             {
+                using var requestTimeout = CreateRequestTimeoutSource();
                 using var request = new HttpRequestMessage(HttpMethod.Post, url);
                 request.Content = new StringContent(rawBody, Encoding.UTF8, "application/json");
                 request.Headers.TryAddWithoutValidation("X-Webhook-Timestamp", timestamp);
                 request.Headers.TryAddWithoutValidation("X-Webhook-Signature-V2", signature);
                 request.Headers.TryAddWithoutValidation("X-Request-ID", eventId.ToString());
 
-                using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+                using var response = await _httpClient.SendAsync(
+                    request, HttpCompletionOption.ResponseHeadersRead, requestTimeout.Token);
                 if (response.IsSuccessStatusCode)
                 {
                     _logger.LogInformation(
@@ -757,13 +770,14 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
             // POST重试，共3次
             for (int j = 0; j <= 3; j++)
             {
+                using var requestTimeout = CreateRequestTimeoutSource(cancellationToken);
                 using var request = new HttpRequestMessage(HttpMethod.Post, snapshot.WebhookUrl);
                 request.Content = new StringContent(snapshot.RawBody, Encoding.UTF8, "application/json");
                 request.Headers.TryAddWithoutValidation("X-Webhook-Timestamp", snapshot.Timestamp);
                 request.Headers.TryAddWithoutValidation("X-Webhook-Signature-V2", snapshot.Signature);
                 request.Headers.TryAddWithoutValidation("X-Request-ID", snapshot.RequestId);
 
-                using var response = await _httpClient.SendAsync(request, cancellationToken);
+                using var response = await _httpClient.SendAsync(request, requestTimeout.Token);
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -830,7 +844,8 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
 
             try
             {
-                using var msgResponse = await _httpClient.GetAsync(new Uri(messagesUrl), cancellationToken);
+                using var requestTimeout = CreateRequestTimeoutSource(cancellationToken);
+                using var msgResponse = await _httpClient.GetAsync(new Uri(messagesUrl), requestTimeout.Token);
 
                 if (msgResponse.StatusCode == HttpStatusCode.OK)
                 {
@@ -918,7 +933,8 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
         MetaDate? meta;
         try
         {
-            using var metaResponse = await _httpClient.GetAsync(metaUrl);
+            using var requestTimeout = CreateRequestTimeoutSource();
+            using var metaResponse = await _httpClient.GetAsync(metaUrl, requestTimeout.Token);
             if (metaResponse.StatusCode != HttpStatusCode.OK)
             {
                 UpdateStatus(SyncStatus.Error, $"元数据请求返回 HTTP {(int)metaResponse.StatusCode}。");
@@ -975,7 +991,8 @@ public sealed partial class RemoteSyncService : ObservableObject, IRemoteSyncSer
         List<TodoItem>? pulled;
         try
         {
-            using var listResponse = await _httpClient.GetAsync(listUrl);
+            using var requestTimeout = CreateRequestTimeoutSource();
+            using var listResponse = await _httpClient.GetAsync(listUrl, requestTimeout.Token);
             if (listResponse.StatusCode != HttpStatusCode.OK)
             {
                 UpdateStatus(SyncStatus.Error, $"todo请求返回 HTTP {(int)listResponse.StatusCode}。");
